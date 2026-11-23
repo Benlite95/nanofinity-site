@@ -280,27 +280,40 @@
     <section class="section section--alt philosophy" id="studio" data-swarm="story" data-dot="Studio">
       <div class="container philosophy__grid">
         <div class="philosophy__lab">
-          <div class="philosophy__stage" id="phiStage" aria-hidden="true"></div>
-          <div class="phi-ctl" id="phiCtl" role="group" aria-label="Golden angle playground">
-            <div class="phi-ctl__read">
-              <div><span class="phi-ctl__k">Angle</span><output class="phi-ctl__v" id="phiAngle">137.51°</output></div>
-              <div><span class="phi-ctl__k">Ratio</span><output class="phi-ctl__v" id="phiRatio">1.61803</output></div>
-              <div class="phi-ctl__harm"><span class="phi-ctl__k">Spiral harmony <b id="phiHarmPct">100%</b></span><span class="phi-ctl__meter"><i id="phiHarm"></i></span></div>
-            </div>
-            <label class="phi-ctl__slider">
-              <span class="sr-only">Divergence angle in degrees</span>
-              <input type="range" id="phiSlider" min="120" max="155" step="0.05" value="137.5" />
-            </label>
-            <div class="phi-ctl__row">
-              <div class="phi-ctl__presets">
-                <button type="button" class="phi-pill is-active" data-angle="137.50776">φ 137.51°</button>
-                <button type="button" class="phi-pill" data-angle="137.3">137.3°</button>
-                <button type="button" class="phi-pill" data-angle="140">140°</button>
-                <button type="button" class="phi-pill" data-angle="random">Chaos</button>
+          <div class="fib2048" id="fib2048">
+            <div class="fib2048__bar">
+              <div class="fib2048__title">Fibonacci <b>2048</b></div>
+              <div class="fib2048__stats">
+                <div class="fib2048__stat"><span>Score</span><output id="fgScore">0</output></div>
+                <div class="fib2048__stat"><span>Best</span><output id="fgBest">0</output></div>
+                <div class="fib2048__stat fib2048__stat--max"><span>Max</span><output id="fgMax">1</output></div>
               </div>
-              <button type="button" class="phi-game" id="phiGame">Find φ</button>
+              <button type="button" class="fib2048__new" id="fgNew">New Game</button>
             </div>
-            <p class="phi-ctl__msg" id="phiMsg" aria-live="polite">Drag the angle — at 360°/φ² the dots lock into Fibonacci spirals.</p>
+            <div class="fib2048__stage" id="phiStage">
+              <div class="fib2048__board" id="fgBoard" tabindex="0" role="application" aria-label="Fibonacci 2048 board. Use arrow keys or WASD to slide tiles.">
+                <div class="fib2048__cells" aria-hidden="true"></div>
+                <div class="fib2048__tiles" id="fgTiles" aria-hidden="true"></div>
+                <div class="fib2048__overlay" id="fgOverlay" hidden>
+                  <p class="fib2048__ovTitle" id="fgOvTitle">Game over</p>
+                  <p class="fib2048__ovSub" id="fgOvSub"></p>
+                  <div class="fib2048__ovBtns">
+                    <button type="button" class="fib2048__btn" id="fgKeep" hidden>Keep playing</button>
+                    <button type="button" class="fib2048__btn fib2048__btn--gold" id="fgRetry">New game</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="fib2048__foot">
+              <p class="fib2048__hint">Merge adjacent Fibonacci numbers (1+1→2, 1+2→3, 2+3→5, 3+5→8…)</p>
+              <div class="fib2048__pad" role="group" aria-label="Move tiles">
+                <button type="button" data-dir="left" aria-label="Move left">←</button>
+                <button type="button" data-dir="up" aria-label="Move up">↑</button>
+                <button type="button" data-dir="down" aria-label="Move down">↓</button>
+                <button type="button" data-dir="right" aria-label="Move right">→</button>
+              </div>
+            </div>
+            <p class="sr-only" id="fgLive" aria-live="polite"></p>
           </div>
         </div>
         <div class="philosophy__copy reveal">

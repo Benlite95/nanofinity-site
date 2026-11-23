@@ -454,7 +454,7 @@
     const st = document.getElementById("phiStage");
     if (!st) return;
     const r = st.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const Rs = Math.min(r.width, r.height) * 0.47, o = shuffled("story"), sp = Rs * Math.sqrt(Math.PI / N);
+    const Rs = Math.min(r.width, r.height) * 0.6, o = shuffled("story"), sp = Rs * Math.sqrt(Math.PI / N);
     const dtS = storyLastT < 0 ? 0 : Math.max(0, Math.min(0.05, t - storyLastT)); storyLastT = t;
     storyGlow = Math.max(0, storyGlow - dtS * 0.6);
     const spin = t * 0.04, base = Math.min(2.6, sp * 0.4);
@@ -463,7 +463,9 @@
       const sh = Math.pow(Math.max(0, Math.sin(rr * 9 - t * 1.4)), 8);
       // celebratory gold ripple travelling outward after a good "Lock In"
       const ring = storyGlow > 0 ? Math.exp(-Math.pow((rr - (1 - storyGlow) * 1.3) / 0.08, 2)) * storyGlow : 0;
-      set(o[j], cx + Math.cos(a) * rr * Rs * br, cy + Math.sin(a) * rr * Rs * br, base * (0.72 + rr * 0.5) * (1 + ring * 0.8), 0.55 + 0.4 * rr + ring * 0.3, sh * 0.3 + ring, sh * 0.5 + ring);
+      // softer under the game board, a brighter halo where the sculpture spills out around it
+      const halo = 0.3 + 0.7 * smooth((rr - 0.62) / 0.25);
+      set(o[j], cx + Math.cos(a) * rr * Rs * br, cy + Math.sin(a) * rr * Rs * br, base * (0.72 + rr * 0.5) * (1 + ring * 0.8), (0.55 + 0.4 * rr) * halo + ring * 0.4, sh * 0.3 + ring, sh * 0.5 + ring);
     }
   };
 

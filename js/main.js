@@ -841,58 +841,157 @@ const NANO_CONFIG = Object.assign(
     });
   })();
 
-  /* ---------- Golden Angle playground (Studio) ---------- */
-  (function phiLab() {
-    const slider = $("#phiSlider");
-    if (!slider) return;
-    const GA = 360 / (((1 + Math.sqrt(5)) / 2) ** 2); // 137.50776…
-    const ctl = $("#phiCtl"), angEl = $("#phiAngle"), ratEl = $("#phiRatio"), pctEl = $("#phiHarmPct"), meter = $("#phiHarm");
-    const msg = $("#phiMsg"), game = $("#phiGame"), pills = $$(".phi-pill");
-    const DEFAULT_MSG = msg.innerHTML;
-    let angle = GA, playing = false;
-    const harmony = (a) => Math.max(0, Math.min(100, 100 - Math.abs(a - GA) * 10));
-    function apply(a, fromSlider) {
-      angle = a;
-      if (!fromSlider) slider.value = String(a);
-      if (window.NanoSwarm && NanoSwarm.setStoryAngle) NanoSwarm.setStoryAngle(a);
-      const ratio = 1 / (1 - a / 360), h = harmony(a);
-      angEl.textContent = a.toFixed(2) + "°";
-      ratEl.textContent = ratio.toFixed(5);
-      pctEl.textContent = h.toFixed(1).replace(/\.0$/, "") + "%";
-      meter.style.transform = `scaleX(${(h / 100).toFixed(3)})`;
-      pills.forEach((p) => p.classList.toggle("is-active", p.dataset.angle !== "random" && Math.abs(parseFloat(p.dataset.angle) - a) < 0.03));
+  /* ---------- Fibonacci 2048 (Gold Merge) ---------- */
+  (function fib2048() {
+    const root = $("#fib2048");
+    if (!root) return;
+    const board = $("#fgBoard"), tilesEl = $("#fgTiles"), cellsEl = $(".fib2048__cells", root);
+    const scoreEl = $("#fgScore"), bestEl = $("#fgBest"), maxEl = $("#fgMax"), live = $("#fgLive");
+    const overlay = $("#fgOverlay"), ovTitle = $("#fgOvTitle"), ovSub = $("#fgOvSub"), keepBtn = $("#fgKeep");
+    const SIZE = 4, WIN = 2584, BEST_KEY = "nano_fib2048_best";
+    const FIB = [1, 2]; while (FIB[FIB.length - 1] < 1e7) FIB.push(FIB[FIB.length - 1] + FIB[FIB.length - 2]);
+    const idx = (v) => FIB.indexOf(v);
+    // 1+1 → 2, otherwise two consecutive Fibonacci numbers merge into the next one
+    const canMerge = (a, b) => (a === 1 && b === 1) || (idx(a) >= 0 && idx(b) >= 0 && Math.abs(idx(a) - idx(b)) === 1);
+    const level = (v) => v <= 2 ? 1 : v <= 5 ? 2 : v <= 13 ? 3 : v <= 34 ? 4 : v <= 89 ? 5 : v <= 377 ? 6 : 7;
+    for (let k = 0; k < SIZE * SIZE; k++) cellsEl.appendChild(document.createElement("i"));
+
+    let grid, tiles, nextId = 1, score = 0, best = +(localStorage.getItem(BEST_KEY) || 0), maxTile = 1, won = false, keepPlaying = false, busy = false;
+    bestEl.textContent = best;
+
+    function tileEl(t) {
+      const el = document.createElement("div");
+      el.innerHTML = '<div class="fg-tile__in"></div>';
+      tilesEl.appendChild(el); t.el = el; paint(t); return el;
     }
-    slider.addEventListener("input", () => apply(parseFloat(slider.value), true));
-    pills.forEach((p) => p.addEventListener("click", () => {
-      if (playing) stopGame(false);
-      let a = p.dataset.angle === "random" ? 120 + Math.random() * 35 : parseFloat(p.dataset.angle);
-      if (p.dataset.angle === "random") while (Math.abs(a - GA) < 3) a = 120 + Math.random() * 35;
-      apply(a);
-      msg.innerHTML = p.dataset.angle === "random" ? "Chaos: a random angle — see how the order falls apart." :
-        Math.abs(a - GA) < 0.01 ? "The golden angle: <b>360° / φ²</b>. Every dot finds its own space — Fibonacci spirals appear." :
-        "So close to φ, yet the spirals already smear into spokes.";
-    }));
-    function stopGame(scored) {
-      playing = false; ctl.classList.remove("is-hidden-read");
-      game.classList.remove("is-playing"); game.textContent = "Find φ";
-      if (!scored) msg.innerHTML = DEFAULT_MSG;
+    function paint(t, extra = "") {
+      const d = String(t.v).length;
+      t.el.className = `fg-tile l${level(t.v)}${d >= 4 ? " d4" : d === 3 ? " d3" : ""}${extra}`;
+      t.el.style.setProperty("--r", t.r); t.el.style.setProperty("--c", t.c);
+      t.el.firstChild.textContent = t.v;
     }
-    game.addEventListener("click", () => {
-      if (!playing) {
-        playing = true; ctl.classList.add("is-hidden-read");
-        game.classList.add("is-playing"); game.textContent = "Lock In";
-        let a = 120 + Math.random() * 35; while (Math.abs(a - GA) < 4) a = 120 + Math.random() * 35;
-        apply(a);
-        msg.innerHTML = "Readout hidden. Drag until the dots lock into the cleanest spiral, then <b>Lock In</b>.";
-        slider.focus({ preventScroll: true });
-      } else {
-        const h = harmony(angle);
-        stopGame(true);
-        const verdict = h >= 99 ? "Golden!" : h >= 96 ? "So close!" : h >= 85 ? "Nice eye." : "Keep tuning.";
-        msg.innerHTML = `<b>${h.toFixed(1)}% — ${verdict}</b> You chose ${angle.toFixed(2)}°; φ lives at ${GA.toFixed(3)}°.`;
-        if (h >= 96 && window.NanoSwarm && NanoSwarm.celebrate) NanoSwarm.celebrate();
+    function empties() { const out = []; for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (!grid[r][c]) out.push([r, c]); return out; }
+    function spawn() {
+      const e = empties(); if (!e.length) return;
+      const [r, c] = e[Math.floor(Math.random() * e.length)];
+      const t = { id: nextId++, v: Math.random() < 0.85 ? 1 : 2, r, c };
+      grid[r][c] = t; tiles.push(t); tileEl(t); paint(t, " is-new");
+    }
+    function updateStats() {
+      scoreEl.textContent = score; maxEl.textContent = maxTile;
+      if (score > best) { best = score; bestEl.textContent = best; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {} }
+    }
+    function reset() {
+      tilesEl.innerHTML = ""; grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(null)); tiles = [];
+      score = 0; maxTile = 1; won = false; keepPlaying = false; busy = false; overlay.hidden = true;
+      spawn(); spawn(); maxTile = Math.max(...tiles.map((t) => t.v)); updateStats();
+    }
+    function movesLeft() {
+      if (empties().length) return true;
+      for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
+        const v = grid[r][c].v;
+        if (c + 1 < SIZE && canMerge(v, grid[r][c + 1].v)) return true;
+        if (r + 1 < SIZE && canMerge(v, grid[r + 1][c].v)) return true;
       }
+      return false;
+    }
+    function showOverlay(title, sub, keep) {
+      ovTitle.textContent = title; ovSub.textContent = sub; keepBtn.hidden = !keep; overlay.hidden = false;
+    }
+    const VEC = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] };
+    function move(dir) {
+      if (busy || !overlay.hidden || !VEC[dir]) return false;
+      const [dr, dc] = VEC[dir];
+      let moved = false, gained = 0, bigMerge = false;
+      const prevMax = maxTile, gone = [], merged = [];
+      const fresh = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
+      for (let line = 0; line < SIZE; line++) {
+        // collect the line's tiles in the order they travel (front first)
+        const cells = [];
+        for (let k = 0; k < SIZE; k++) {
+          const p = dc ? (dc > 0 ? SIZE - 1 - k : k) : (dr > 0 ? SIZE - 1 - k : k);
+          cells.push(dc ? [line, p] : [p, line]);
+        }
+        const out = []; // { t, mergedThisTurn }
+        cells.forEach(([r, c]) => {
+          const t = grid[r][c]; if (!t) return;
+          const last = out[out.length - 1];
+          if (last && !last.m && canMerge(last.t.v, t.v)) {
+            last.t.v += t.v; last.m = true; gained += last.t.v; merged.push(last.t);
+            gone.push({ t, to: last }); if (last.t.v >= 13) bigMerge = true;
+            maxTile = Math.max(maxTile, last.t.v); moved = true;
+          } else out.push({ t, m: false });
+        });
+        out.forEach((o, k) => {
+          const [r, c] = cells[k];
+          if (o.t.r !== r || o.t.c !== c) moved = true;
+          o.t.r = r; o.t.c = c; fresh[r][c] = o.t;
+        });
+        gone.forEach((g) => { if (!g.done) { g.done = true; } });
+      }
+      if (!moved) return false;
+      busy = true; grid = fresh; score += gained;
+      // slide survivors, slide the absorbed tiles into their partner, then pop the merged ones
+      tiles.forEach((t) => { if (!merged.includes(t)) paint(t); else { t.el.style.setProperty("--r", t.r); t.el.style.setProperty("--c", t.c); } });
+      gone.forEach((g) => { g.t.el.classList.add("is-gone"); g.t.el.style.setProperty("--r", g.to.t.r); g.t.el.style.setProperty("--c", g.to.t.c); });
+      const goneSet = new Set(gone.map((g) => g.t));
+      tiles = tiles.filter((t) => !goneSet.has(t));
+      setTimeout(() => {
+        goneSet.forEach((t) => t.el.remove());
+        merged.forEach((t) => { paint(t); void t.el.offsetWidth; paint(t, " is-merged"); });
+        spawn(); updateStats(); busy = false;
+        if (gained) live.textContent = `Merged into ${Math.max(...merged.map((t) => t.v))}. Score ${score}.`;
+        if ((bigMerge || maxTile > prevMax && maxTile >= 8) && window.NanoSwarm && NanoSwarm.celebrate) NanoSwarm.celebrate();
+        if (!won && maxTile >= WIN) { won = true; showOverlay("Golden! 2584", `You reached F(18). Score ${score}.`, true); }
+        else if (!movesLeft()) showOverlay("Game over", `Score ${score} · max tile ${maxTile}`, false);
+      }, 125);
+      return true;
+    }
+
+    // ----- input: keys only while the player is engaged with the board -----
+    let hover = false, engagedAt = 0;
+    const engaged = () => document.activeElement === board || hover;
+    board.addEventListener("pointerenter", () => { hover = true; board.classList.add("is-active"); });
+    board.addEventListener("pointerleave", () => { hover = false; if (document.activeElement !== board) board.classList.remove("is-active"); });
+    board.addEventListener("focus", () => board.classList.add("is-active"));
+    board.addEventListener("blur", () => { if (!hover) board.classList.remove("is-active"); });
+    const KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", a: "left", d: "right", w: "up", s: "down", A: "left", D: "right", W: "up", S: "down" };
+    document.addEventListener("keydown", (e) => {
+      const dir = KEYS[e.key];
+      if (!dir || !engaged() || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.target.closest && e.target.closest("input, textarea, select")) return;
+      e.preventDefault(); move(dir);
     });
-    apply(GA);
+    // swipe (touch) and click-drag (mouse)
+    let sx = 0, sy = 0, down = false;
+    board.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      down = true; sx = e.clientX; sy = e.clientY;
+      board.focus({ preventScroll: true });
+    });
+    board.addEventListener("pointerup", (e) => {
+      if (!down) return; down = false;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+      move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+    });
+    board.addEventListener("pointercancel", () => { down = false; });
+    $$(".fib2048__pad button", root).forEach((b) => b.addEventListener("click", () => move(b.dataset.dir)));
+    $("#fgNew").addEventListener("click", reset);
+    $("#fgRetry").addEventListener("click", reset);
+    keepBtn.addEventListener("click", () => { keepPlaying = true; overlay.hidden = true; board.focus({ preventScroll: true }); });
+
+    // small hook for QA / tinkering: NanoFib.load([[1,1,0,0],...]) then NanoFib.move("left")
+    window.NanoFib = {
+      move: (d) => move(d),
+      load(rows) {
+        tilesEl.innerHTML = ""; tiles = []; overlay.hidden = true; busy = false;
+        grid = rows.map((row, r) => row.map((v, c) => { if (!v) return null; const t = { id: nextId++, v, r, c }; tiles.push(t); tileEl(t); return t; }));
+        maxTile = Math.max(1, ...tiles.map((t) => t.v)); updateStats();
+      },
+      state: () => ({ grid: grid.map((row) => row.map((t) => (t ? t.v : 0))), score, best, maxTile }),
+      canMerge
+    };
+    reset();
   })();
 })();
