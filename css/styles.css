@@ -619,16 +619,6 @@ main, .footer { position: relative; z-index: 1; }
 /* ---------- word-by-word lit paragraph ---------- */
 .words .wd { opacity: 0.16; color: #d9dde6; } /* opacity eased per-frame in main.js */
 
-/* ---------- ticker ---------- */
-.ticker { position: relative; z-index: 1; overflow: hidden; padding: 26px 0; border-bottom: 1px solid var(--line-soft); background: rgba(6, 9, 17, 0.55); }
-.ticker__track { display: flex; align-items: center; gap: 34px; width: max-content; will-change: transform; }
-.ticker__track span {
-  font-family: var(--f-display); font-weight: 700; font-size: clamp(1.6rem, 3.4vw, 2.8rem); letter-spacing: 0.02em; text-transform: uppercase; white-space: nowrap;
-  color: transparent; -webkit-text-stroke: 1px rgba(243, 213, 141, 0.55);
-}
-.ticker__track span:nth-of-type(2n) { color: var(--gold-l); -webkit-text-stroke: 0; opacity: 0.92; }
-.ticker__track i { font-style: normal; color: var(--gold); font-size: 1.2rem; }
-
 /* ---------- pinned compound ---------- */
 .compound__pin { padding: clamp(80px, 11vw, 120px) 0; }
 .compound__after { padding: 10px 0 clamp(80px, 10vw, 120px); }
@@ -695,7 +685,6 @@ main, .footer { position: relative; z-index: 1; }
   .hero__copy::before { inset: -30px -40px; }
 }
 @media (max-width: 640px) {
-  .ticker { padding: 18px 0; }
   .step__orb { margin: 10px 0 40px; }
 }
 @media (prefers-reduced-motion: reduce) {

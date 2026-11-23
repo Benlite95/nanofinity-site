@@ -749,26 +749,6 @@ const NANO_CONFIG = Object.assign(
     });
   })();
 
-  /* ---------- velocity-reactive ticker ---------- */
-  (function ticker() {
-    const tr = $("#ticker");
-    if (!tr || reduceMotion) return;
-    let x = 0, v = 0, lastY = window.scrollY, last = performance.now(), skew = 0;
-    const loop = (now) => {
-      const dt = Math.min(50, now - last); last = now;
-      const y = window.scrollY, dy = y - lastY; lastY = y;
-      v += (dy - v) * 0.12;
-      const speed = 1 + 0.6 * Math.abs(v);
-      x -= speed * (dt / 16.7) * (v < -0.5 ? -1 : 1);
-      const half = tr.scrollWidth / 3;
-      if (half > 0) { x = ((x % half) - half) % half; }
-      skew += (clamp(v * 0.4, -12, 12) - skew) * 0.1;
-      tr.style.transform = `translate3d(${x.toFixed(1)}px,0,0) skewX(${(-skew).toFixed(2)}deg)`;
-      requestAnimationFrame(loop);
-    };
-    requestAnimationFrame(loop);
-  })();
-
   /* ---------- right-side dot navigation ---------- */
   (function dotnav() {
     const nav = $("#dotnav");
