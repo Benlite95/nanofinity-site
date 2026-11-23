@@ -70,18 +70,14 @@ const NANO_CONFIG = Object.assign(
   }
 
   /* ---------- Reveal on scroll ---------- */
-  const revealEls = $$(".reveal, .divider");
-  // dividers are thin, so reveal them as soon as any part enters the viewport
+  const revealEls = $$(".reveal");
   if ("IntersectionObserver" in window && !reduceMotion) {
     const ro = new IntersectionObserver((entries) => {
       entries.forEach((en) => {
         if (en.isIntersecting) { en.target.classList.add("is-visible"); ro.unobserve(en.target); }
       });
     }, { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
-    const dro = new IntersectionObserver((entries) => {
-      entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("is-visible"); dro.unobserve(en.target); } });
-    }, { threshold: 0, rootMargin: "0px 0px -15% 0px" });
-    revealEls.forEach((el) => (el.classList.contains("divider") ? dro : ro).observe(el));
+    revealEls.forEach((el) => ro.observe(el));
   } else revealEls.forEach((el) => el.classList.add("is-visible"));
 
   /* ---------- Fibonacci / golden spiral geometry ---------- */
@@ -123,26 +119,6 @@ const NANO_CONFIG = Object.assign(
     return { squares, d, box, F };
   }
   const FIB = fibonacci(8);
-
-  // fit spiral path into a viewBox
-  function fitPath(vbW, vbH, pad = 4, flip = false) {
-    const { box } = FIB;
-    const sc = Math.min((vbW - pad * 2) / box.w, (vbH - pad * 2) / box.h);
-    const ox = (vbW - box.w * sc) / 2 - box.x * sc, oy = (vbH - box.h * sc) / 2 - box.y * sc;
-    return FIB.d.replace(/([MA])([^MA]+)/g, (m, cmd, args) => {
-      const n = args.trim().split(/\s+/).map(Number);
-      if (cmd === "M") return `M${n[0] * sc + ox} ${n[1] * sc + oy}`;
-      return ` A${n[0] * sc} ${n[1] * sc} 0 0 0 ${n[5] * sc + ox} ${n[6] * sc + oy}`;
-    });
-  }
-  $$(".service__spiral .spiral-path").forEach((p) => {
-    p.setAttribute("d", fitPath(100, 62, 2));
-    p.style.setProperty("--len", p.getTotalLength());
-  });
-  $$(".divider__path").forEach((p) => {
-    p.setAttribute("d", fitPath(340, 210, 6));
-    p.style.setProperty("--len", p.getTotalLength());
-  });
 
   /* ---------- Service card hover light ---------- */
   $$(".service").forEach((card) => {
@@ -775,7 +751,7 @@ const NANO_CONFIG = Object.assign(
     let mx = -100, my = -100, x = -100, y = -100;
     window.addEventListener("pointermove", (e) => {
       mx = e.clientX; my = e.clientY; c.classList.add("on");
-      c.classList.toggle("big", !!e.target.closest("a,button,.mode,.lab__tab,input,select,textarea,label"));
+      c.classList.toggle("big", !!e.target.closest("a,button,.lab__tab,input,select,textarea,label,canvas"));
     }, { passive: true });
     document.addEventListener("pointerleave", () => c.classList.remove("on"));
     const loop = () => {
@@ -821,157 +797,165 @@ const NANO_CONFIG = Object.assign(
     });
   })();
 
-  /* ---------- Fibonacci 2048 (Gold Merge) ---------- */
-  (function fib2048() {
-    const root = $("#fib2048");
-    if (!root) return;
-    const board = $("#fgBoard"), tilesEl = $("#fgTiles"), cellsEl = $(".fib2048__cells", root);
-    const scoreEl = $("#fgScore"), bestEl = $("#fgBest"), maxEl = $("#fgMax"), live = $("#fgLive");
-    const overlay = $("#fgOverlay"), ovTitle = $("#fgOvTitle"), ovSub = $("#fgOvSub"), keepBtn = $("#fgKeep");
-    const SIZE = 4, WIN = 2584, BEST_KEY = "nano_fib2048_best";
-    const FIB = [1, 2]; while (FIB[FIB.length - 1] < 1e7) FIB.push(FIB[FIB.length - 1] + FIB[FIB.length - 2]);
-    const idx = (v) => FIB.indexOf(v);
-    // 1+1 → 2, otherwise two consecutive Fibonacci numbers merge into the next one
-    const canMerge = (a, b) => (a === 1 && b === 1) || (idx(a) >= 0 && idx(b) >= 0 && Math.abs(idx(a) - idx(b)) === 1);
-    const level = (v) => v <= 2 ? 1 : v <= 5 ? 2 : v <= 13 ? 3 : v <= 34 ? 4 : v <= 89 ? 5 : v <= 377 ? 6 : 7;
-    for (let k = 0; k < SIZE * SIZE; k++) cellsEl.appendChild(document.createElement("i"));
-
-    let grid, tiles, nextId = 1, score = 0, best = +(localStorage.getItem(BEST_KEY) || 0), maxTile = 1, won = false, keepPlaying = false, busy = false;
-    bestEl.textContent = best;
-
-    function tileEl(t) {
-      const el = document.createElement("div");
-      el.innerHTML = '<div class="fg-tile__in"></div>';
-      tilesEl.appendChild(el); t.el = el; paint(t); return el;
+  /* ---------- Golden Snap (arcade mini-game) ---------- */
+  (function goldenSnap() {
+    const cv = $("#snapCanvas");
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    const scoreEl = $("#snapScore"), comboEl = $("#snapCombo"), bestEl = $("#snapBest"), lifeEls = $$("#snapLives i"), live = $("#snapLive");
+    const BEST_KEY = "nano_snap_best";
+    let best = +(localStorage.getItem(BEST_KEY) || 0); bestEl.textContent = best;
+    let S = 0, dpr = 1, pts = [], cum = [], L = 1;
+    // golden-ish log spiral, ~2.2 turns, sampled by arc length and centred in the square
+    function build() {
+      const w = cv.clientWidth || 380; dpr = Math.min(window.devicePixelRatio || 1, 2);
+      cv.width = Math.round(w * dpr); cv.height = Math.round(w * dpr); S = w;
+      const turns = 2.2, tMax = turns * Math.PI * 2, rMin = 0.035, b = Math.log(1 / rMin) / tMax, raw = [];
+      for (let k = 0; k <= 900; k++) { const t = (k / 900) * tMax, r = rMin * Math.exp(b * t); raw.push([Math.cos(t + 2.4) * r, Math.sin(t + 2.4) * r]); }
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      raw.forEach(([x, y]) => { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+      const sc = (S * 0.8) / Math.max(x1 - x0, y1 - y0), ox = S / 2 - ((x0 + x1) / 2) * sc, oy = S / 2 - ((y0 + y1) / 2) * sc;
+      pts = raw.map(([x, y]) => [ox + x * sc, oy + y * sc]);
+      cum = [0]; for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
+      L = cum[cum.length - 1];
     }
-    function paint(t, extra = "") {
-      const d = String(t.v).length;
-      t.el.className = `fg-tile l${level(t.v)}${d >= 4 ? " d4" : d === 3 ? " d3" : ""}${extra}`;
-      t.el.style.setProperty("--r", t.r); t.el.style.setProperty("--c", t.c);
-      t.el.firstChild.textContent = t.v;
+    function at(s) { // point + local scale (0 eye … 1 rim) at arc length s
+      s = Math.max(0, Math.min(L, s));
+      let lo = 0, hi = cum.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] < s) lo = m; else hi = m; }
+      const f = (s - cum[lo]) / Math.max(1e-6, cum[hi] - cum[lo]);
+      return { x: pts[lo][0] + (pts[hi][0] - pts[lo][0]) * f, y: pts[lo][1] + (pts[hi][1] - pts[lo][1]) * f, u: s / L };
     }
-    function empties() { const out = []; for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) if (!grid[r][c]) out.push([r, c]); return out; }
-    function spawn() {
-      const e = empties(); if (!e.length) return;
-      const [r, c] = e[Math.floor(Math.random() * e.length)];
-      const t = { id: nextId++, v: Math.random() < 0.85 ? 1 : 2, r, c };
-      grid[r][c] = t; tiles.push(t); tileEl(t); paint(t, " is-new");
+    const G = { state: "ready", s: 0, dir: 1, speed: 0, z0: 0, z1: 0, inZone: false, score: 0, combo: 0, lives: 3, shake: 0, pulse: 0, flash: 0, parts: [], pops: [], t: 0 };
+    const mult = () => Math.min(8, 1 + Math.floor(G.combo / 2));
+    function placeZone() {
+      const width = Math.max(0.05, 0.16 * Math.pow(0.93, G.combo + G.score / 60)) * L;
+      // put it ahead of the pearl, never on top of it
+      let c, tries = 0;
+      do { c = width / 2 + Math.random() * (L - width); tries++; } while (tries < 40 && (Math.abs(c - G.s) < width * 1.6 || (G.dir > 0 ? c < G.s : c > G.s) && tries < 20));
+      G.z0 = c - width / 2; G.z1 = c + width / 2; G.inZone = false;
     }
-    function updateStats() {
-      scoreEl.textContent = score; maxEl.textContent = maxTile;
-      if (score > best) { best = score; bestEl.textContent = best; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {} }
+    function hud() {
+      scoreEl.textContent = G.score; comboEl.textContent = "×" + mult();
+      lifeEls.forEach((el, i) => el.classList.toggle("off", i >= G.lives));
+      if (G.score > best) { best = G.score; bestEl.textContent = best; try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {} }
     }
-    function reset() {
-      tilesEl.innerHTML = ""; grid = Array.from({ length: SIZE }, () => Array(SIZE).fill(null)); tiles = [];
-      score = 0; maxTile = 1; won = false; keepPlaying = false; busy = false; overlay.hidden = true;
-      spawn(); spawn(); maxTile = Math.max(...tiles.map((t) => t.v)); updateStats();
+    function start() {
+      Object.assign(G, { state: "play", s: L * 0.02, dir: 1, speed: Math.max(150, L * 0.16), score: 0, combo: 0, lives: 3, shake: 0, pulse: 0, parts: [], pops: [] });
+      placeZone(); hud(); live.textContent = "Game started.";
     }
-    function movesLeft() {
-      if (empties().length) return true;
-      for (let r = 0; r < SIZE; r++) for (let c = 0; c < SIZE; c++) {
-        const v = grid[r][c].v;
-        if (c + 1 < SIZE && canMerge(v, grid[r][c + 1].v)) return true;
-        if (r + 1 < SIZE && canMerge(v, grid[r + 1][c].v)) return true;
-      }
-      return false;
+    function burst(x, y, n, power) {
+      for (let k = 0; k < n; k++) { const a = Math.random() * Math.PI * 2, v = (0.4 + Math.random()) * power; G.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, r: 1 + Math.random() * 2.2 }); }
     }
-    function showOverlay(title, sub, keep) {
-      ovTitle.textContent = title; ovSub.textContent = sub; keepBtn.hidden = !keep; overlay.hidden = false;
+    function miss(reason) {
+      G.lives--; G.combo = 0; G.shake = 14; G.flash = 1;
+      const p = at(G.s); G.pops.push({ x: p.x, y: p.y - 14, txt: reason, life: 1, bad: true });
+      hud();
+      if (G.lives <= 0) { G.state = "over"; live.textContent = `Game over. Score ${G.score}.`; }
+      else placeZone();
     }
-    const VEC = { left: [0, -1], right: [0, 1], up: [-1, 0], down: [1, 0] };
-    function move(dir) {
-      if (busy || !overlay.hidden || !VEC[dir]) return false;
-      const [dr, dc] = VEC[dir];
-      let moved = false, gained = 0, bigMerge = false;
-      const prevMax = maxTile, gone = [], merged = [];
-      const fresh = Array.from({ length: SIZE }, () => Array(SIZE).fill(null));
-      for (let line = 0; line < SIZE; line++) {
-        // collect the line's tiles in the order they travel (front first)
-        const cells = [];
-        for (let k = 0; k < SIZE; k++) {
-          const p = dc ? (dc > 0 ? SIZE - 1 - k : k) : (dr > 0 ? SIZE - 1 - k : k);
-          cells.push(dc ? [line, p] : [p, line]);
-        }
-        const out = []; // { t, mergedThisTurn }
-        cells.forEach(([r, c]) => {
-          const t = grid[r][c]; if (!t) return;
-          const last = out[out.length - 1];
-          if (last && !last.m && canMerge(last.t.v, t.v)) {
-            last.t.v += t.v; last.m = true; gained += last.t.v; merged.push(last.t);
-            gone.push({ t, to: last }); if (last.t.v >= 13) bigMerge = true;
-            maxTile = Math.max(maxTile, last.t.v); moved = true;
-          } else out.push({ t, m: false });
-        });
-        out.forEach((o, k) => {
-          const [r, c] = cells[k];
-          if (o.t.r !== r || o.t.c !== c) moved = true;
-          o.t.r = r; o.t.c = c; fresh[r][c] = o.t;
-        });
-        gone.forEach((g) => { if (!g.done) { g.done = true; } });
-      }
-      if (!moved) return false;
-      busy = true; grid = fresh; score += gained;
-      // slide survivors, slide the absorbed tiles into their partner, then pop the merged ones
-      tiles.forEach((t) => { if (!merged.includes(t)) paint(t); else { t.el.style.setProperty("--r", t.r); t.el.style.setProperty("--c", t.c); } });
-      gone.forEach((g) => { g.t.el.classList.add("is-gone"); g.t.el.style.setProperty("--r", g.to.t.r); g.t.el.style.setProperty("--c", g.to.t.c); });
-      const goneSet = new Set(gone.map((g) => g.t));
-      tiles = tiles.filter((t) => !goneSet.has(t));
-      setTimeout(() => {
-        goneSet.forEach((t) => t.el.remove());
-        merged.forEach((t) => { paint(t); void t.el.offsetWidth; paint(t, " is-merged"); });
-        spawn(); updateStats(); busy = false;
-        if (gained) live.textContent = `Merged into ${Math.max(...merged.map((t) => t.v))}. Score ${score}.`;
-        if ((bigMerge || maxTile > prevMax && maxTile >= 8) && window.NanoSwarm && NanoSwarm.celebrate) NanoSwarm.celebrate();
-        if (!won && maxTile >= WIN) { won = true; showOverlay("Golden! 2584", `You reached F(18). Score ${score}.`, true); }
-        else if (!movesLeft()) showOverlay("Game over", `Score ${score} · max tile ${maxTile}`, false);
-      }, 125);
-      return true;
+    function snap() {
+      if (G.state !== "play") { start(); return; }
+      const p = at(G.s);
+      if (G.s >= G.z0 && G.s <= G.z1) {
+        const mid = (G.z0 + G.z1) / 2, perfect = Math.abs(G.s - mid) < (G.z1 - G.z0) * 0.18;
+        G.combo++; const pts1 = 10 * mult() * (perfect ? 2 : 1); G.score += pts1;
+        G.speed = Math.min(L * 0.62, G.speed * 1.06 + 6); G.shake = perfect ? 9 : 5; G.pulse = 1;
+        burst(p.x, p.y, perfect ? 46 : 28, perfect ? 4.2 : 3);
+        G.pops.push({ x: p.x, y: p.y - 16, txt: (perfect ? "PERFECT +" : "+") + pts1, life: 1 });
+        hud(); placeZone();
+        if (G.combo % 5 === 0 && window.NanoSwarm && NanoSwarm.celebrate) NanoSwarm.celebrate();
+      } else miss("MISS");
     }
-
-    // ----- input: keys only while the player is engaged with the board -----
-    let hover = false, engagedAt = 0;
-    const engaged = () => document.activeElement === board || hover;
-    board.addEventListener("pointerenter", () => { hover = true; board.classList.add("is-active"); });
-    board.addEventListener("pointerleave", () => { hover = false; if (document.activeElement !== board) board.classList.remove("is-active"); });
-    board.addEventListener("focus", () => board.classList.add("is-active"));
-    board.addEventListener("blur", () => { if (!hover) board.classList.remove("is-active"); });
-    const KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down", a: "left", d: "right", w: "up", s: "down", A: "left", D: "right", W: "up", S: "down" };
+    // input: tap / click anywhere on the board; Space/Enter only while the board is focused or hovered
+    let hover = false;
+    cv.addEventListener("pointerenter", () => { hover = true; });
+    cv.addEventListener("pointerleave", () => { hover = false; });
+    cv.addEventListener("pointerdown", (e) => { e.preventDefault(); cv.focus({ preventScroll: true }); snap(); });
     document.addEventListener("keydown", (e) => {
-      const dir = KEYS[e.key];
-      if (!dir || !engaged() || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.target.closest && e.target.closest("input, textarea, select")) return;
-      e.preventDefault(); move(dir);
+      if ((e.code !== "Space" && e.key !== "Enter") || e.repeat) return;
+      if (document.activeElement !== cv && !hover) return;
+      e.preventDefault(); snap();
     });
-    // swipe (touch) and click-drag (mouse)
-    let sx = 0, sy = 0, down = false;
-    board.addEventListener("pointerdown", (e) => {
-      if (e.target.closest("button")) return;
-      down = true; sx = e.clientX; sy = e.clientY;
-      board.focus({ preventScroll: true });
-    });
-    board.addEventListener("pointerup", (e) => {
-      if (!down) return; down = false;
-      const dx = e.clientX - sx, dy = e.clientY - sy;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
-      move(Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
-    });
-    board.addEventListener("pointercancel", () => { down = false; });
-    $$(".fib2048__pad button", root).forEach((b) => b.addEventListener("click", () => move(b.dataset.dir)));
-    $("#fgNew").addEventListener("click", reset);
-    $("#fgRetry").addEventListener("click", reset);
-    keepBtn.addEventListener("click", () => { keepPlaying = true; overlay.hidden = true; board.focus({ preventScroll: true }); });
 
-    // small hook for QA / tinkering: NanoFib.load([[1,1,0,0],...]) then NanoFib.move("left")
-    window.NanoFib = {
-      move: (d) => move(d),
-      load(rows) {
-        tilesEl.innerHTML = ""; tiles = []; overlay.hidden = true; busy = false;
-        grid = rows.map((row, r) => row.map((v, c) => { if (!v) return null; const t = { id: nextId++, v, r, c }; tiles.push(t); tileEl(t); return t; }));
-        maxTile = Math.max(1, ...tiles.map((t) => t.v)); updateStats();
-      },
-      state: () => ({ grid: grid.map((row) => row.map((t) => (t ? t.v : 0))), score, best, maxTile }),
-      canMerge
-    };
-    reset();
+    function draw(dt) {
+      const W = S;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, W);
+      G.shake *= Math.pow(0.0025, dt); const sx = (Math.random() - 0.5) * G.shake, sy = (Math.random() - 0.5) * G.shake;
+      ctx.translate(sx, sy);
+      // spiral of tiny pearls (size grows outward)
+      for (let s = 0; s < L; s += 7) { const p = at(s), r = 0.8 + p.u * 2.2; ctx.globalAlpha = 0.32 + p.u * 0.4; ctx.fillStyle = "#d4af37"; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.fill(); }
+      ctx.globalAlpha = 1;
+      // target zone: glowing arc along the spiral
+      if (G.state === "play") {
+        const breathe = 0.75 + 0.25 * Math.sin(G.t * 6);
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        for (const [w, a] of [[16, 0.12], [9, 0.28], [4, 0.95]]) {
+          ctx.strokeStyle = `rgba(255, 205, 110, ${a * breathe})`; ctx.lineWidth = w; ctx.beginPath();
+          for (let s = G.z0; s <= G.z1; s += 3) { const p = at(s); s === G.z0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y); }
+          const e = at(G.z1); ctx.lineTo(e.x, e.y); ctx.stroke();
+        }
+      }
+      // pearl + trail
+      if (G.state !== "over") {
+        for (let k = 6; k >= 1; k--) { const p = at(G.s - G.dir * k * 6), r = 3 + p.u * 6; ctx.globalAlpha = 0.07 * (7 - k); ctx.fillStyle = "#f3d58d"; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.fill(); }
+        ctx.globalAlpha = 1;
+        const p = at(G.s), r = (4 + p.u * 7) * (1 + G.pulse * 0.45);
+        const gl = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3.2); gl.addColorStop(0, "rgba(255,200,110,0.55)"); gl.addColorStop(1, "rgba(255,200,110,0)");
+        ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(p.x, p.y, r * 3.2, 0, 6.283); ctx.fill();
+        const g = ctx.createRadialGradient(p.x - r * 0.35, p.y - r * 0.4, r * 0.1, p.x, p.y, r);
+        g.addColorStop(0, "#fff6d8"); g.addColorStop(0.45, "#e6bd52"); g.addColorStop(1, "#7a5418");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 6.283); ctx.fill();
+      }
+      // hit pulse ring
+      if (G.pulse > 0.01) { const p = at(G.s); ctx.strokeStyle = `rgba(255,214,130,${G.pulse * 0.8})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 10 + (1 - G.pulse) * 46, 0, 6.283); ctx.stroke(); }
+      // particles
+      ctx.globalCompositeOperation = "lighter";
+      G.parts.forEach((q) => { ctx.globalAlpha = Math.max(0, q.life); ctx.fillStyle = "#ffd27a"; ctx.beginPath(); ctx.arc(q.x, q.y, q.r, 0, 6.283); ctx.fill(); });
+      ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+      // floating score pops
+      ctx.textAlign = "center"; ctx.font = "700 13px Montserrat, sans-serif";
+      G.pops.forEach((q) => { ctx.globalAlpha = Math.max(0, q.life); ctx.fillStyle = q.bad ? "#c9cfdb" : "#ffe3a1"; ctx.fillText(q.txt, q.x, q.y - (1 - q.life) * 26); });
+      ctx.globalAlpha = 1;
+      // miss flash
+      if (G.flash > 0.01) { ctx.fillStyle = `rgba(6,9,17,${G.flash * 0.45})`; ctx.fillRect(-20, -20, W + 40, W + 40); }
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // overlays
+      if (G.state !== "play") {
+        ctx.fillStyle = "rgba(6,9,17,0.55)"; ctx.fillRect(0, 0, W, W);
+        ctx.textAlign = "center";
+        const big = G.state === "over" ? "Game over" : "Golden Snap";
+        const gr = ctx.createLinearGradient(W * 0.3, 0, W * 0.7, 0); gr.addColorStop(0, "#f7e2a6"); gr.addColorStop(1, "#c9962f");
+        ctx.fillStyle = gr; ctx.font = `700 ${Math.round(W * 0.085)}px Montserrat, sans-serif`; ctx.fillText(big, W / 2, W * 0.46);
+        ctx.fillStyle = "#c3c8d3"; ctx.font = `500 ${Math.round(W * 0.04)}px Inter, sans-serif`;
+        ctx.fillText(G.state === "over" ? `Score ${G.score} · Best ${best}` : "Snap the pearl inside the glow", W / 2, W * 0.55);
+        ctx.fillStyle = "#f3d58d"; ctx.font = `600 ${Math.round(W * 0.034)}px Montserrat, sans-serif`;
+        ctx.fillText(G.state === "over" ? "TAP TO PLAY AGAIN" : "TAP TO START", W / 2, W * 0.64);
+      }
+    }
+    let last = performance.now(), visible = true;
+    function loop(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; G.t += dt;
+      if (visible) {
+        if (G.state === "play") {
+          const was = G.s >= G.z0 && G.s <= G.z1;
+          G.s += G.dir * G.speed * dt;
+          if (G.s >= L) { G.s = L - (G.s - L); G.dir = -1; } else if (G.s <= 0) { G.s = -G.s; G.dir = 1; }
+          const now2 = G.s >= G.z0 && G.s <= G.z1;
+          if (was && !now2) miss("TOO LATE"); // passed straight through the zone
+        } else { G.s = (G.s + 60 * dt) % L; }
+        G.pulse *= Math.pow(0.02, dt); G.flash *= Math.pow(0.01, dt);
+        G.parts.forEach((q) => { q.x += q.vx; q.y += q.vy; q.vx *= 0.94; q.vy *= 0.94; q.life -= dt * 1.6; });
+        G.parts = G.parts.filter((q) => q.life > 0);
+        G.pops.forEach((q) => { q.life -= dt * 1.3; }); G.pops = G.pops.filter((q) => q.life > 0);
+        draw(dt);
+      }
+      requestAnimationFrame(loop);
+    }
+    build();
+    window.addEventListener("resize", () => { const u = G.s / L; build(); G.s = u * L; });
+    if ("IntersectionObserver" in window) new IntersectionObserver((en) => { visible = en[0].isIntersecting; }, { rootMargin: "100px" }).observe(cv);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => draw(0));
+    requestAnimationFrame(loop);
+    window.NanoSnap = { state: () => ({ state: G.state, score: G.score, combo: G.combo, lives: G.lives, best, s: G.s, z0: G.z0, z1: G.z1, L, speed: G.speed }), snap, start };
   })();
 })();

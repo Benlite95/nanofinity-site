@@ -7,7 +7,7 @@ Plain HTML + CSS + vanilla JS. No build step, no dependencies. Open `index.html`
 nanofinity-site/
 ├── index.html            # all page content / sections
 ├── css/styles.css        # design system (colors, type, layout, responsive)
-├── js/spiral.js          # hero canvas: golden pearl Fibonacci spiral (Orbit / Ripple / Pulse / Bloom)
+├── js/spiral.js          # hero canvas: golden pearl Fibonacci spiral (always in Pulse) + page-wide dot swarm
 ├── js/main.js            # nav, reveals, Bot Blueprint Explorer, compound spiral, estimator, forms
 ├── assets/               # processed logos + favicons (assets/raw = original uploads)
 ├── site.webmanifest, robots.txt, .nojekyll
@@ -90,13 +90,14 @@ Then go to *Settings → Pages → Deploy from branch → main / (root)*. `.noje
 ## Customising
 
 - **Colors & fonts**: CSS variables at the top of `css/styles.css` (`--gold`, `--bg0` and the rest). The fonts are Montserrat (display), Inter (body) and JetBrains Mono, all from Google Fonts.
-- **Hero spiral**: `js/spiral.js`. `ROWS` controls pearl rows, sizes and spacing. `B` is the golden growth rate. The mode buttons call `NanoSpiral.setMode('orbit' | 'ripple' | 'pulse' | 'bloom')`. Visitors who set "prefers-reduced-motion" get a slowed, calmer version.
+- **Hero spiral**: `js/spiral.js`. `ROWS` controls pearl rows, sizes and spacing. `B` is the golden growth rate. It always runs the Pulse look. Visitors who set "prefers-reduced-motion" get a slowed, calmer version.
 - **Bot Lab scenarios**: the `S` object in `js/main.js` sets the inputs, actions, outcome, console log and metrics for each tab. All metrics are labelled *illustrative* on the page. Swap them for real case-study numbers when you have them.
 - **Leverage estimator**: the formula in `js/main.js` is team × hours/week × 46 weeks × 60% automated.
 
 ## v3 — Gold dot swarm & page motion
 
-- `js/spiral.js` is the swarm engine: one fixed full-screen `<canvas id="swarm">` (~1,600 dots desktop / ~1,100 mobile) that morphs between formations as you scroll. Each section opts in with `data-swarm="hero|services|bot-lab|compound|story|process|contact|footer"`. Public hooks: `NanoSwarm.setMode('orbit'|'ripple'|'pulse'|'bloom')`, `NanoSwarm.setScenario(i)`, `NanoSwarm.shock(x, y)`.
+- `js/spiral.js` is the swarm engine: one fixed full-screen `<canvas id="swarm">` (~1,600 dots desktop / ~1,100 mobile) that morphs between formations as you scroll. Each section opts in with `data-swarm="hero|services|bot-lab|compound|story|process|contact|footer"`. Public hooks: `NanoSwarm.setScenario(i)`, `NanoSwarm.shock(x, y)`.
 - The hero is a true logarithmic golden spiral (r × 4.2 per turn, ~2.4 turns) built only from dots that shrink smoothly into the eye — no solid centre. It stays a spiral on hover: nearby pearls spring away from the cursor and bounce back, with a subtle tilt and glint, and a click sends a soft shockwave. The footer keeps the giant dotted NANOFINITY wordmark.
 - `js/main.js` adds: masked line reveals (`data-lines` on any heading), the word-lit paragraph (`.words`), the pinned 4-stage Compound section (desktop ≥901px wide and ≥760px tall), count-ups (`data-count`, `data-decimals`), dot navigation (sections with `data-dot`, shown ≥1360px), ring cursor (fine pointers) and the gold iris flash on in-page links.
 - `prefers-reduced-motion` gets calm, slow dots, no flash or cursor, and text shown immediately.
+- The hero spiral always runs in the Pulse look (no mode switcher). "Why the Spiral" hosts **Golden Snap**, a compact canvas arcade game (`#snapCanvas`, best score in `localStorage` key `nano_snap_best`).

@@ -191,8 +191,8 @@
     return out;
   }
 
-  let mode = "orbit";
-  const energy = { orbit: 1, ripple: 0, pulse: 0, bloom: 0 };
+  const mode = "pulse"; // hero always runs the Pulse look
+  const energy = { orbit: 0, ripple: 0, pulse: 1, bloom: 0 };
   let rot = 0;
   const HS = { cx: 0, cy: 0, R: 0, scale: 0, rx: 0, ry: 0, spin: 0, eb: 0, w: 0 };
   const pr = { x: 0, y: 0, p: 1 };
@@ -553,12 +553,6 @@
     if (e.target.closest("a,button,input,select,textarea,label")) return;
     rings.push({ x: e.clientX, y: e.clientY, r: 0 });
   });
-  document.querySelectorAll(".hero__modes .mode").forEach((b, _, all) => b.addEventListener("click", () => {
-    mode = b.dataset.mode;
-    all.forEach((o) => { const on = o === b; o.classList.toggle("is-active", on); o.setAttribute("aria-pressed", String(on)); });
-    if (mode === "ripple") rings.push({ x: HS.cx, y: HS.cy, r: 0 });
-  }));
-
   function resize() {
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = innerWidth; H = innerHeight;
@@ -694,7 +688,6 @@
   requestAnimationFrame(frame);
 
   window.NanoSwarm = {
-    setMode: (m) => { mode = m; },
     setScenario(k) {
       scenario = k;
       if (labRegion) rings.push({ x: labRegion.x + labRegion.w / 2, y: labRegion.y + labRegion.h / 2, r: 0 });
