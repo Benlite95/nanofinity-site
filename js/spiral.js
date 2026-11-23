@@ -135,17 +135,17 @@
 
   // ---------- HERO: golden pearl spiral ----------
   const ROWS = [
-    { k: 1.0, size: 0.078, gap: 2.1 },
-    { k: 0.8, size: 0.026, gap: 2.7 },
-    { k: 0.685, size: 0.018, gap: 3.0 }
+    { k: 1.0, size: 0.082, gap: 2.1 },
+    { k: 0.79, size: 0.03, gap: 2.6 },
+    { k: 0.66, size: 0.02, gap: 2.9 }
   ];
   // True logarithmic (golden) spiral: r = R_MIN·e^(B·θ), r × φ every half turn.
   // Every strand is self-similar (dot size ∝ r, spacing ∝ size), so pearls stay evenly packed from
   // the big outer pearls all the way down to tiny dots at the eye — no gaps, no flared tail, no ribbon.
-  // Hero growth: r × φ every ¾ turn (≈1.9× per turn) — a compact, rounded nautilus like the logo,
-  // rather than the wide-open sweep that made the outer tail flare out.
-  const HB = Math.log(PHI) / (1.5 * Math.PI), HSQ = Math.sqrt(1 + HB * HB);
-  const R_MIN = 0.004, THETA_SPAN = Math.log(1 / R_MIN) / HB, BASE_ROT = Math.PI * 0.92;
+  // Hero growth: r × 4.2 per turn → ~2.4 turns from the tiny eye to the outer pearls, leaving the
+  // open negative space of the logo instead of many tight concentric rings.
+  const HB = Math.log(4.2) / (2 * Math.PI), HSQ = Math.sqrt(1 + HB * HB);
+  const R_MIN = 0.028, THETA_SPAN = Math.log(1 / R_MIN) / HB, BASE_ROT = Math.PI * 0.92;
   let pearls = [];
   const HC = { ox: 0, oy: 0, fit: 1 }; // recentre + fit the silhouette so it sits balanced in its circle
   function buildHero() {
@@ -196,12 +196,12 @@
   function heroGeom() {
     const r = hero.getBoundingClientRect();
     if (W < 900) {
-      HS.R = Math.min(W * 0.36, 220);
+      HS.R = Math.min(W * 0.33, 200);
       HS.cx = W * 0.5; HS.cy = r.top + 76 + HS.R * 1.12;
       const sb = Math.round(76 + HS.R * 2.2) + "px";
       if (hero.style.getPropertyValue("--spiral-bottom") !== sb) hero.style.setProperty("--spiral-bottom", sb);
     } else {
-      HS.R = Math.min(r.height * 0.37, W * 0.235, 360);
+      HS.R = Math.min(r.height * 0.34, W * 0.215, 330);
       HS.cx = W * 0.7; HS.cy = r.top + r.height * 0.5;
     }
   }
@@ -251,8 +251,7 @@
         const dx = qx - mouse.x, dy = qy - mouse.y, d2 = dx * dx + dy * dy, sg = 105;
         if (d2 < 9 * sg * sg) {
           const d = Math.sqrt(d2) || 1, hold = smooth((Math.hypot(ux, uy) - 0.12) / 0.4); // the eye stays calm
-          lens = Math.exp(-d2 / (sg * sg)); const push = 20 * lens * hold;
-          qx += (dx / d) * push; qy += (dy / d) * push;
+          lens = Math.exp(-d2 / (sg * sg)) * (0.4 + 0.6 * hold); // light catch near the cursor (push is physical, below)
         }
       }
       const px = size * HS.scale * p.p * (1 + g * 0.35 + lens * 0.12);
@@ -509,7 +508,7 @@
   }
 
   // ---------- input ----------
-  const mouse = { x: -9999, y: -9999, nx: 0, ny: 0, tx: 0, ty: 0, on: false };
+  const mouse = { x: -9999, y: -9999, px: -9999, py: -9999, v: 0, nx: 0, ny: 0, tx: 0, ty: 0, on: false };
   const rings = [];
   addEventListener("pointermove", (e) => {
     mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = e.pointerType === "mouse";
@@ -544,6 +543,10 @@
 
   // ---------- render ----------
   let T = 0, last = performance.now(), lastSY = scrollY, running = true;
+  const ANCHORS = { hero: "#top", services: "#services", "bot-lab": "#bot-lab", compound: "#fibSvg", story: ".philosophy__media", process: "#process", contact: ".contact__stage", footer: ".footer__giant" };
+  const anchorCache = {};
+  const anchorEl = (k) => anchorCache[k] || (anchorCache[k] = document.querySelector(ANCHORS[k] || "body"));
+  let anchorKey = null, anchorTop = null;
 
 
   function frame(now) {
@@ -553,10 +556,16 @@
     T += reduce ? dt * 0.15 : dt;
     const f = Math.min(3, dt * 60);
 
-    // content scrolled: move the swarm rigidly with the page (no smear)
+    // Move the swarm rigidly with whatever it is drawn on (no smear). We follow the formation's anchor
+    // element rather than raw scrollY, so while #compound is pinned (position: sticky) the dots stay put
+    // instead of being knocked up by every scroll tick and springing back (the old jitter).
     const sy = scrollY, dy = sy - lastSY;
     lastSY = sy;
-    if (dy) for (let i = 0; i < N; i++) py[i] -= dy;
+    const an = anchorEl(current), aTop = an ? an.getBoundingClientRect().top : null;
+    let shift = -dy;
+    if (aTop !== null && anchorKey === current && anchorTop !== null) shift = aTop - anchorTop;
+    anchorKey = current; anchorTop = aTop;
+    if (shift) for (let i = 0; i < N; i++) py[i] += shift;
 
     for (const k in energy) energy[k] = lerp(energy[k], mode === k ? 1 : 0, Math.min(1, dt * 2.5));
     HS.eb = smooth(energy.bloom);
@@ -568,13 +577,19 @@
     formations[current](T);
 
     // physics: spring to target + damping (pull-and-settle)
-    const k = reduce ? 0.22 : 0.045, damp = Math.pow(reduce ? 0.6 : 0.84, f), MR = 120;
+    const heroOn = current === "hero";
+    // hero: stiffer, under-damped springs so pushed pearls visibly overshoot and bounce back into place
+    const k = reduce ? 0.22 : heroOn ? 0.085 : 0.045, damp = Math.pow(reduce ? 0.6 : heroOn ? 0.8 : 0.84, f);
+    const MR = heroOn ? 150 : 120;
+    const msp = Math.hypot(mouse.x - mouse.px, mouse.y - mouse.py) / Math.max(f, 0.001); mouse.px = mouse.x; mouse.py = mouse.y;
+    mouse.v = lerp(mouse.v || 0, Math.min(60, mouse.on ? msp : 0), 0.35);
+    const MF = heroOn ? 4.6 + mouse.v * 0.24 : 1.5;
     for (let r = rings.length - 1; r >= 0; r--) if ((rings[r].r += 16 * f) > Math.max(W, H) * 1.2) rings.splice(r, 1);
     for (let i = 0; i < N; i++) {
       let ax = (tx[i] - px[i]) * k, ay = (ty[i] - py[i]) * k;
-      if (mouse.on && !reduce && current !== "hero") { // hero uses a fold-free lens on its targets instead
+      if (mouse.on && !reduce) {
         const dx = px[i] - mouse.x, dy2 = py[i] - mouse.y, d2 = dx * dx + dy2 * dy2;
-        if (d2 < MR * MR) { const d = Math.sqrt(d2) || 1, s = ((MR - d) / MR) * 1.5; ax += (dx / d) * s; ay += (dy2 / d) * s; }
+        if (d2 < MR * MR) { const d = Math.sqrt(d2) || 1, u = (MR - d) / MR, s = (heroOn ? u * u : u) * MF; ax += (dx / d) * s; ay += (dy2 / d) * s; }
       }
       for (const rg of rings) {
         const dx = px[i] - rg.x, dy2 = py[i] - rg.y, d = Math.hypot(dx, dy2) || 1;

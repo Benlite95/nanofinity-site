@@ -542,8 +542,7 @@ main, .footer { position: relative; z-index: 1; }
 .lr .gold-text { display: inline; }
 
 /* ---------- word-by-word lit paragraph ---------- */
-.words .wd { opacity: 0.16; transition: opacity 0.25s, color 0.25s; }
-.words .wd.on { opacity: 1; color: #d9dde6; }
+.words .wd { opacity: 0.16; color: #d9dde6; } /* opacity eased per-frame in main.js */
 
 /* ---------- ticker ---------- */
 .ticker { position: relative; z-index: 1; overflow: hidden; padding: 26px 0; border-bottom: 1px solid var(--line-soft); background: rgba(6, 9, 17, 0.55); }
@@ -562,12 +561,24 @@ main, .footer { position: relative; z-index: 1; }
 .compound .stage.is-lit { opacity: 1; }
 .compound .stage.is-current { border-color: rgba(212, 175, 55, 0.5); background: rgba(212, 175, 55, 0.08); }
 .stage__bar { display: block; height: 2px; margin-top: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
-.stage__bar b { display: block; height: 100%; background: var(--grad-gold); transform-origin: left; transform: scaleX(0); box-shadow: 0 0 10px rgba(255, 180, 90, 0.6); }
+.stage__bar b { display: block; height: 100%; will-change: transform; background: var(--grad-gold); transform-origin: left; transform: scaleX(0); box-shadow: 0 0 10px rgba(255, 180, 90, 0.6); }
 .fib__sq { stroke: rgba(212, 175, 55, 0.1); }
-@media (min-width: 901px) and (min-height: 640px) {
-  .compound__track { height: 330vh; }
-  .compound__pin { position: sticky; top: 0; height: 100vh; display: flex; align-items: center; padding: var(--nav-h) 0 0; }
-  .compound__grid { width: min(1200px, 100% - 48px); }
+/* Pin only when the whole frame fits below the fixed navbar — otherwise the flex-centred content
+   overflowed upward and slid under the nav. Pure CSS sticky; no JS position swapping. */
+@media (min-width: 901px) and (min-height: 760px) {
+  .compound__track { height: 300vh; height: 300svh; }
+  .compound__pin {
+    position: sticky; top: 0; height: 100vh; height: 100svh; overflow: clip;
+    display: flex; align-items: center; padding: calc(var(--nav-h) + 8px) 0 16px; box-sizing: border-box;
+  }
+  .compound__grid { width: min(1200px, 100% - 48px); align-items: center; }
+  .compound__pin .section__title { font-size: clamp(2rem, 5.6vh, 3.1rem); }
+  .compound__pin .section__lede { font-size: clamp(0.95rem, 2vh, 1.06rem); margin-bottom: 0; }
+  .compound__pin .stages { margin-top: clamp(12px, 2.4vh, 26px); gap: 2px; }
+  .compound__pin .stage { padding: clamp(9px, 1.5vh, 16px) 18px; }
+  .compound__pin .stage p { font-size: 0.88rem; }
+  .compound__pin .eyebrow { margin-bottom: clamp(8px, 1.6vh, 18px); }
+  .compound__pin .fib { max-height: calc(100svh - var(--nav-h) - 60px); }
 }
 .calc { max-width: 920px; margin-inline: auto; }
 .calc__body { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; align-items: end; }

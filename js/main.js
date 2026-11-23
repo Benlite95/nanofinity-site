@@ -201,54 +201,66 @@ const NANO_CONFIG = Object.assign(
     const stages = $$("#stages .stage");
     const bars = stages.map((s) => s.querySelector(".stage__bar b"));
     const words = $("#compoundLede");
-    let progress = 0, shown = 0, wordSpans = [];
+    let wordSpans = [];
     if (words) {
       words.innerHTML = words.textContent.trim().split(/\s+/).map((w) => `<span class="wd">${w}</span>`).join(" ");
       wordSpans = $$(".wd", words);
     }
-    const track = $("#compoundTrack");
-    const pinned = () => getComputedStyle($(".compound__pin")).position === "sticky";
-    function measure() {
-      const vh = window.innerHeight;
-      if (pinned()) {
-        // pinned scrollytelling: progress = how far through the tall track we are
-        const r = track.getBoundingClientRect();
-        progress = clamp(-r.top / Math.max(1, r.height - vh));
-      } else {
-        const r = $(".compound__pin").getBoundingClientRect();
-        progress = clamp((vh * 0.85 - r.top) / (r.height * 0.8));
-      }
-      const wp = clamp(progress / 0.28);
-      const nw = Math.round(wp * wordSpans.length);
-      wordSpans.forEach((w, i) => w.classList.toggle("on", i < nw));
-    }
-    window.addEventListener("scroll", measure, { passive: true });
-    window.addEventListener("resize", measure);
-    measure();
+    const track = $("#compoundTrack"), pin = $(".compound__pin");
 
-    let t0 = performance.now();
+    // Layout is measured only on load/resize (no getBoundingClientRect / getComputedStyle per scroll tick).
+    let isPinned = false, trackTop = 0, trackSpan = 1, pinTop = 0, pinH = 1, vh = window.innerHeight;
+    const docTop = (el) => { let y = 0; for (let e = el; e; e = e.offsetParent) y += e.offsetTop; return y; };
+    function layout() {
+      vh = window.innerHeight;
+      isPinned = getComputedStyle(pin).position === "sticky";
+      trackTop = docTop(track); trackSpan = Math.max(1, track.offsetHeight - vh);
+      pinTop = docTop(pin); pinH = Math.max(1, pin.offsetHeight);
+    }
+    // target progress straight from scrollY (cheap); the displayed value eases toward it every frame
+    const targetProgress = () => isPinned
+      ? clamp((window.scrollY - trackTop) / trackSpan)
+      : clamp((window.scrollY + vh * 0.85 - pinTop) / (pinH * 0.8));
+    layout();
+    window.addEventListener("resize", layout);
+    window.addEventListener("load", layout);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(layout);
+    if ("ResizeObserver" in window) new ResizeObserver(layout).observe(document.body);
+
+    let shown = targetProgress(), last = performance.now(), t0 = last;
+    const state = { sq: [], node: [], lit: [], cur: [] }, wordOp = [];
+    const setCls = (arr, k, el, cls, on) => { if (arr[k] !== on) { arr[k] = on; el.classList.toggle(cls, on); } };
     function tick(now) {
-      shown += (progress - shown) * 0.08;
-      if (reduceMotion) shown = progress;
-      const off = L * (1 - shown);
+      const dt = Math.min(0.1, (now - last) / 1000); last = now;
+      const target = targetProgress();
+      // frame-rate independent lerp, ≈0.14 per 60fps frame — wheel/trackpad steps become one silky glide
+      shown = reduceMotion ? target : shown + (target - shown) * (1 - Math.pow(1 - 0.14, dt * 60));
+      if (Math.abs(target - shown) < 0.0004) shown = target;
+      const d = shown;
+      // spiral draws over the first 90% of the pin, stages advance in step with it
+      const draw = clamp(d / 0.9);
+      const off = L * (1 - draw);
       path.style.strokeDashoffset = off; glow.style.strokeDashoffset = off;
-      // light squares as the spiral passes through them
-      sqEls.forEach((r, i) => r.classList.toggle("is-lit", shown * total >= cum[i] - arcLen[i] * 0.5));
-      let lit = -1;
-      nodes.forEach((n, i) => { const on = shown >= n.f - 0.01; n.el.classList.toggle("is-lit", on); if (on) lit = i; });
-      const sp = clamp((progress - 0.12) / 0.86); // stages advance over the rest of the pin
+      sqEls.forEach((r, i) => setCls(state.sq, i, r, "is-lit", draw * total >= cum[i] - arcLen[i] * 0.5));
+      nodes.forEach((n, i) => setCls(state.node, i, n.el, "is-lit", draw >= n.f - 0.01));
+      const sp = clamp((d - 0.1) / 0.85);
       stages.forEach((s, i) => {
         const f = clamp(sp * 4 - i);
-        bars[i] && (bars[i].style.transform = `scaleX(${f.toFixed(3)})`);
-        s.classList.toggle("is-lit", f > 0 || i <= lit);
-        s.classList.toggle("is-current", f > 0 && f < 1 || (i === 3 && f >= 1));
+        if (bars[i]) bars[i].style.transform = `scaleX(${f.toFixed(4)})`;
+        setCls(state.lit, i, s, "is-lit", f > 0);
+        setCls(state.cur, i, s, "is-current", (f > 0 && f < 1) || (i === 3 && f >= 1));
+      });
+      // words fade in continuously (opacity only) rather than snapping on/off
+      const wp = clamp(d / 0.28) * wordSpans.length;
+      wordSpans.forEach((w, i) => {
+        const o = Math.round((0.16 + 0.84 * clamp(wp - i)) * 100) / 100;
+        if (wordOp[i] !== o) { wordOp[i] = o; w.style.opacity = o; }
       });
       // spark travels outward along the drawn spiral, looping
       const tt = ((now - t0) / 4200) % 1;
-      const ease = tt * tt; // accelerate outward — compounding
-      const pt = path.getPointAtLength(Math.max(0.001, ease * shown * L));
+      const pt = path.getPointAtLength(Math.max(0.001, tt * tt * draw * L));
       spark.setAttribute("cx", pt.x); spark.setAttribute("cy", pt.y);
-      spark.setAttribute("opacity", shown > 0.02 ? String(Math.sin(tt * Math.PI) * 0.9 + 0.1) : "0");
+      spark.setAttribute("opacity", draw > 0.02 ? String(Math.sin(tt * Math.PI) * 0.9 + 0.1) : "0");
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
