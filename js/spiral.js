@@ -152,7 +152,7 @@
   // inward (θ decreasing), the two fine trails slide outward. Because the spiral is self-similar
   // (size ∝ r, spacing ∝ r), shifting θ keeps the pattern perfectly even, and slots that wrap around do
   // so while invisible (shrunk to nothing at the eye / faded at the rim) so the loop never pops.
-  const FLOW = [-0.2, 0.3, 0.26]; // rad/s per strand: − inward (nano), + outward (infinity)
+  const FLOW = [-0.1, 0.15, 0.13]; // rad/s per strand: − inward (nano), + outward (infinity)
   let flowOff = [0, 0, 0], warp = 1, lastHeroT = -1;
   function buildHero() {
     const rows = ROWS.map((row, s) => {
@@ -230,7 +230,7 @@
     // hover warp: the vortex speeds up while the cursor is over the spiral, then eases back to cruise
     const dtH = lastHeroT < 0 ? 0 : Math.max(0, Math.min(0.05, t - lastHeroT)); lastHeroT = t;
     const over = mouse.on && Math.hypot(mouse.x - HS.cx, mouse.y - HS.cy) < HS.R * 1.15;
-    warp = lerp(warp, over ? 3.4 : 1, Math.min(1, dtH * (over ? 3 : 1.4)));
+    warp = lerp(warp, over ? 1.9 : 1, Math.min(1, dtH * (over ? 3 : 1.4)));
     const calm = 1 - eb; // bloom freezes the conveyor into the sunflower
     for (let s2 = 0; s2 < 3; s2++) flowOff[s2] += FLOW[s2] * warp * calm * (reduce ? 0.2 : 1) * dtH;
     const cS = Math.cos(HS.spin), sS = Math.sin(HS.spin);
@@ -448,15 +448,22 @@
   };
 
   // ---------- STORY: sunflower phyllotaxis ----------
+  // Golden-angle playground: the divergence angle comes from the slider in the Studio section.
+  let storyAngle = 137.50776 * Math.PI / 180, storyGlow = 0, storyLastT = -1;
   formations.story = function (t) {
-    const fig = document.querySelector(".philosophy__media");
-    if (!fig) return;
-    const r = fig.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const Rs = Math.max(r.width, r.height) * (W < 900 ? 0.64 : 0.6), o = shuffled("story"), sp = Rs * Math.sqrt(Math.PI / N);
+    const st = document.getElementById("phiStage");
+    if (!st) return;
+    const r = st.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const Rs = Math.min(r.width, r.height) * 0.47, o = shuffled("story"), sp = Rs * Math.sqrt(Math.PI / N);
+    const dtS = storyLastT < 0 ? 0 : Math.max(0, Math.min(0.05, t - storyLastT)); storyLastT = t;
+    storyGlow = Math.max(0, storyGlow - dtS * 0.6);
+    const spin = t * 0.04, base = Math.min(2.6, sp * 0.4);
     for (let j = 0; j < N; j++) {
-      const rr = Math.sqrt((j + 0.5) / N), a = j * GA + t * 0.05, br = 1 + 0.025 * Math.sin(t * 1.1 - rr * 7);
+      const rr = Math.sqrt((j + 0.5) / N), a = j * storyAngle + spin, br = 1 + 0.02 * Math.sin(t * 1.1 - rr * 7);
       const sh = Math.pow(Math.max(0, Math.sin(rr * 9 - t * 1.4)), 8);
-      set(o[j], cx + Math.cos(a) * rr * Rs * br, cy + Math.sin(a) * rr * Rs * br, Math.min(2.6, sp * 0.3) * (0.7 + rr * 0.5), 0.55 + 0.4 * rr, sh * 0.3, sh * 0.5);
+      // celebratory gold ripple travelling outward after a good "Lock In"
+      const ring = storyGlow > 0 ? Math.exp(-Math.pow((rr - (1 - storyGlow) * 1.3) / 0.08, 2)) * storyGlow : 0;
+      set(o[j], cx + Math.cos(a) * rr * Rs * br, cy + Math.sin(a) * rr * Rs * br, base * (0.72 + rr * 0.5) * (1 + ring * 0.8), 0.55 + 0.4 * rr + ring * 0.3, sh * 0.3 + ring, sh * 0.5 + ring);
     }
   };
 
@@ -568,7 +575,7 @@
 
   // ---------- render ----------
   let T = 0, last = performance.now(), lastSY = scrollY, running = true;
-  const ANCHORS = { hero: "#top", services: "#services", "bot-lab": "#bot-lab", compound: "#fibSvg", story: ".philosophy__media", process: "#process", contact: ".contact__stage", footer: ".footer__giant" };
+  const ANCHORS = { hero: "#top", services: "#services", "bot-lab": "#bot-lab", compound: "#fibSvg", story: "#phiStage", process: "#process", contact: ".contact__stage", footer: ".footer__giant" };
   const anchorCache = {};
   const anchorEl = (k) => anchorCache[k] || (anchorCache[k] = document.querySelector(ANCHORS[k] || "body"));
   let anchorKey = null, anchorTop = null;
@@ -691,6 +698,8 @@
       if (labRegion) rings.push({ x: labRegion.x + labRegion.w / 2, y: labRegion.y + labRegion.h / 2, r: 0 });
     },
     shock(x, y) { rings.push({ x, y, r: 0 }); },
+    setStoryAngle(deg) { storyAngle = deg * Math.PI / 180; },
+    celebrate() { storyGlow = 1; const st = document.getElementById("phiStage"); if (st) { const r = st.getBoundingClientRect(); rings.push({ x: r.left + r.width / 2, y: r.top + r.height / 2, r: 0 }); } },
     get formation() { return current; },
     // QA helper: fastest visible dot (px/frame) and current hover-warp factor
     stats() { let m = 0; for (let i = 0; i < N; i++) if (pa[i] > 0.08) m = Math.max(m, Math.hypot(vx[i], vy[i])); return { maxVisibleSpeed: m, warp }; }

@@ -279,10 +279,30 @@
     <!-- ============ PHILOSOPHY ============ -->
     <section class="section section--alt philosophy" id="studio" data-swarm="story" data-dot="Studio">
       <div class="container philosophy__grid">
-        <figure class="philosophy__media reveal">
-          <img src="assets/logo-wall.jpg" alt="The Nanofinity backlit spiral sign on a concrete wall" width="728" height="676" loading="lazy" />
-          <figcaption>φ = 1.6180339…</figcaption>
-        </figure>
+        <div class="philosophy__lab">
+          <div class="philosophy__stage" id="phiStage" aria-hidden="true"></div>
+          <div class="phi-ctl" id="phiCtl" role="group" aria-label="Golden angle playground">
+            <div class="phi-ctl__read">
+              <div><span class="phi-ctl__k">Angle</span><output class="phi-ctl__v" id="phiAngle">137.51°</output></div>
+              <div><span class="phi-ctl__k">Ratio</span><output class="phi-ctl__v" id="phiRatio">1.61803</output></div>
+              <div class="phi-ctl__harm"><span class="phi-ctl__k">Spiral harmony <b id="phiHarmPct">100%</b></span><span class="phi-ctl__meter"><i id="phiHarm"></i></span></div>
+            </div>
+            <label class="phi-ctl__slider">
+              <span class="sr-only">Divergence angle in degrees</span>
+              <input type="range" id="phiSlider" min="120" max="155" step="0.05" value="137.5" />
+            </label>
+            <div class="phi-ctl__row">
+              <div class="phi-ctl__presets">
+                <button type="button" class="phi-pill is-active" data-angle="137.50776">φ 137.51°</button>
+                <button type="button" class="phi-pill" data-angle="137.3">137.3°</button>
+                <button type="button" class="phi-pill" data-angle="140">140°</button>
+                <button type="button" class="phi-pill" data-angle="random">Chaos</button>
+              </div>
+              <button type="button" class="phi-game" id="phiGame">Find φ</button>
+            </div>
+            <p class="phi-ctl__msg" id="phiMsg" aria-live="polite">Drag the angle — at 360°/φ² the dots lock into Fibonacci spirals.</p>
+          </div>
+        </div>
         <div class="philosophy__copy reveal">
           <p class="eyebrow"><span class="eyebrow__line"></span>Why the spiral</p>
           <h2 class="section__title" data-lines>Nano steps. <span class="gold-text">Infinite outcomes.</span></h2>

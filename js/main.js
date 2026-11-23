@@ -840,4 +840,59 @@ const NANO_CONFIG = Object.assign(
       }, 480);
     });
   })();
+
+  /* ---------- Golden Angle playground (Studio) ---------- */
+  (function phiLab() {
+    const slider = $("#phiSlider");
+    if (!slider) return;
+    const GA = 360 / (((1 + Math.sqrt(5)) / 2) ** 2); // 137.50776…
+    const ctl = $("#phiCtl"), angEl = $("#phiAngle"), ratEl = $("#phiRatio"), pctEl = $("#phiHarmPct"), meter = $("#phiHarm");
+    const msg = $("#phiMsg"), game = $("#phiGame"), pills = $$(".phi-pill");
+    const DEFAULT_MSG = msg.innerHTML;
+    let angle = GA, playing = false;
+    const harmony = (a) => Math.max(0, Math.min(100, 100 - Math.abs(a - GA) * 10));
+    function apply(a, fromSlider) {
+      angle = a;
+      if (!fromSlider) slider.value = String(a);
+      if (window.NanoSwarm && NanoSwarm.setStoryAngle) NanoSwarm.setStoryAngle(a);
+      const ratio = 1 / (1 - a / 360), h = harmony(a);
+      angEl.textContent = a.toFixed(2) + "°";
+      ratEl.textContent = ratio.toFixed(5);
+      pctEl.textContent = h.toFixed(1).replace(/\.0$/, "") + "%";
+      meter.style.transform = `scaleX(${(h / 100).toFixed(3)})`;
+      pills.forEach((p) => p.classList.toggle("is-active", p.dataset.angle !== "random" && Math.abs(parseFloat(p.dataset.angle) - a) < 0.03));
+    }
+    slider.addEventListener("input", () => apply(parseFloat(slider.value), true));
+    pills.forEach((p) => p.addEventListener("click", () => {
+      if (playing) stopGame(false);
+      let a = p.dataset.angle === "random" ? 120 + Math.random() * 35 : parseFloat(p.dataset.angle);
+      if (p.dataset.angle === "random") while (Math.abs(a - GA) < 3) a = 120 + Math.random() * 35;
+      apply(a);
+      msg.innerHTML = p.dataset.angle === "random" ? "Chaos: a random angle — see how the order falls apart." :
+        Math.abs(a - GA) < 0.01 ? "The golden angle: <b>360° / φ²</b>. Every dot finds its own space — Fibonacci spirals appear." :
+        "So close to φ, yet the spirals already smear into spokes.";
+    }));
+    function stopGame(scored) {
+      playing = false; ctl.classList.remove("is-hidden-read");
+      game.classList.remove("is-playing"); game.textContent = "Find φ";
+      if (!scored) msg.innerHTML = DEFAULT_MSG;
+    }
+    game.addEventListener("click", () => {
+      if (!playing) {
+        playing = true; ctl.classList.add("is-hidden-read");
+        game.classList.add("is-playing"); game.textContent = "Lock In";
+        let a = 120 + Math.random() * 35; while (Math.abs(a - GA) < 4) a = 120 + Math.random() * 35;
+        apply(a);
+        msg.innerHTML = "Readout hidden. Drag until the dots lock into the cleanest spiral, then <b>Lock In</b>.";
+        slider.focus({ preventScroll: true });
+      } else {
+        const h = harmony(angle);
+        stopGame(true);
+        const verdict = h >= 99 ? "Golden!" : h >= 96 ? "So close!" : h >= 85 ? "Nice eye." : "Keep tuning.";
+        msg.innerHTML = `<b>${h.toFixed(1)}% — ${verdict}</b> You chose ${angle.toFixed(2)}°; φ lives at ${GA.toFixed(3)}°.`;
+        if (h >= 96 && window.NanoSwarm && NanoSwarm.celebrate) NanoSwarm.celebrate();
+      }
+    });
+    apply(GA);
+  })();
 })();
