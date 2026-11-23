@@ -97,6 +97,6 @@ Then go to *Settings → Pages → Deploy from branch → main / (root)*. `.noje
 ## v3 — Gold dot swarm & page motion
 
 - `js/spiral.js` is the swarm engine: one fixed full-screen `<canvas id="swarm">` (~1,600 dots desktop / ~1,100 mobile) that morphs between formations as you scroll. Each section opts in with `data-swarm="hero|services|bot-lab|compound|story|process|contact|footer"`. Public hooks: `NanoSwarm.setMode('orbit'|'ripple'|'pulse'|'bloom')`, `NanoSwarm.setScenario(i)`, `NanoSwarm.shock(x, y)`.
-- Hover the hero spiral (tap on mobile) to morph it into NANOFINITY. Mouse repels dots; clicking empty space sends a shockwave.
+- The hero is a true logarithmic golden spiral (r × φ every ¾ turn) built only from dots that shrink smoothly into the eye — no solid centre. It stays a spiral on hover: dots part gently around the cursor with a subtle tilt and glint, and a click sends a soft shockwave. The footer keeps the giant dotted NANOFINITY wordmark.
 - `js/main.js` adds: masked line reveals (`data-lines` on any heading), the word-lit paragraph (`.words`), the pinned 4-stage Compound section (desktop ≥901px wide and ≥640px tall), velocity-reactive ticker, count-ups (`data-count`, `data-decimals`), dot navigation (sections with `data-dot`, shown ≥1360px), ring cursor (fine pointers) and the gold iris flash on in-page links.
 - `prefers-reduced-motion` gets calm, slow dots, no flash or cursor, and text shown immediately.

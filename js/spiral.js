@@ -135,22 +135,28 @@
 
   // ---------- HERO: golden pearl spiral ----------
   const ROWS = [
-    { k: 1.0, size: 0.085, gap: 2.08 },
-    { k: 0.835, size: 0.03, gap: 2.5 },
-    { k: 0.765, size: 0.022, gap: 2.7 },
-    { k: 0.71, size: 0.017, gap: 2.9 },
-    { k: 0.665, size: 0.0135, gap: 3.1 },
-    { k: 0.628, size: 0.011, gap: 3.3 }
+    { k: 1.0, size: 0.078, gap: 2.1 },
+    { k: 0.8, size: 0.026, gap: 2.7 },
+    { k: 0.685, size: 0.018, gap: 3.0 }
   ];
-  const R_MIN = 0.1, THETA_SPAN = Math.log(1 / R_MIN) / B, BASE_ROT = Math.PI * 0.92;
+  // True logarithmic (golden) spiral: r = R_MIN·e^(B·θ), r × φ every half turn.
+  // Every strand is self-similar (dot size ∝ r, spacing ∝ size), so pearls stay evenly packed from
+  // the big outer pearls all the way down to tiny dots at the eye — no gaps, no flared tail, no ribbon.
+  // Hero growth: r × φ every ¾ turn (≈1.9× per turn) — a compact, rounded nautilus like the logo,
+  // rather than the wide-open sweep that made the outer tail flare out.
+  const HB = Math.log(PHI) / (1.5 * Math.PI), HSQ = Math.sqrt(1 + HB * HB);
+  const R_MIN = 0.004, THETA_SPAN = Math.log(1 / R_MIN) / HB, BASE_ROT = Math.PI * 0.92;
   let pearls = [];
+  const HC = { ox: 0, oy: 0, fit: 1 }; // recentre + fit the silhouette so it sits balanced in its circle
   function buildHero() {
     const rows = ROWS.map((row, s) => {
-      const dθ = (row.gap * row.size) / SQ, span = THETA_SPAN - s * 0.3, list = [];
-      for (let θ = 0; θ <= span; θ += dθ) {
-        const r = row.k * R_MIN * Math.exp(B * θ);
-        const endT = smooth((span - θ) / 2.4), startT = smooth(θ / 2.4);
-        list.push({ s, θ: θ - THETA_SPAN, r, size: r * row.size * (0.35 + 0.65 * endT) * (0.3 + 0.7 * startT), alpha: (0.72 + 0.28 * endT) * startT });
+      const dθ = (row.gap * row.size) / HSQ, list = [];
+      for (let θ = 0; θ <= THETA_SPAN + 1e-6; θ += dθ) {
+        const r = row.k * R_MIN * Math.exp(HB * θ);
+        if (r * row.size < 0.0011) continue; // sub-pixel even on big screens: skip
+        // fade in only the sub-pixel dots right at the eye; keep a soft, rounded finish on the last few pearls
+        const startT = smooth(θ / 3.5), endT = smooth((THETA_SPAN - θ) / 0.9);
+        list.push({ s, θ: θ - THETA_SPAN, r, size: r * row.size * (0.82 + 0.18 * endT), alpha: (0.45 + 0.55 * startT) * (s ? 0.92 * smooth((THETA_SPAN - θ) / 1.6) : 1) });
       }
       return list;
     });
@@ -159,6 +165,13 @@
     const f = Math.min(1, (N - c0) / rest);
     pearls = rows[0].slice();
     rows.slice(1).forEach((r) => { const keep = Math.floor(r.length * f); for (let j = 0; j < keep; j++) pearls.push(r[Math.floor((j * r.length) / keep)]); });
+    // bounding box of the whole silhouette (unrotated frame) → centre it and fit it to radius 1
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    pearls.forEach((p) => {
+      const x = Math.cos(p.θ) * p.r, y = Math.sin(p.θ) * p.r, e = p.size;
+      x0 = Math.min(x0, x - e); x1 = Math.max(x1, x + e); y0 = Math.min(y0, y - e); y1 = Math.max(y1, y + e);
+    });
+    HC.ox = -(x0 + x1) / 2; HC.oy = -(y0 + y1) / 2; HC.fit = 2 / Math.max(x1 - x0, y1 - y0);
     const byR = pearls.slice().sort((a, b) => a.r - b.r);
     byR.forEach((p, i) => {
       p.u = i / (byR.length - 1);
@@ -166,18 +179,6 @@
       p.bx = Math.cos(ang) * rr; p.by = Math.sin(ang) * rr; p.bsize = 0.0095 + 0.009 * rr;
     });
   }
-  // centre ribbon on the very same spiral (seamless curl)
-  const RIB = [];
-  (function () {
-    const K = 0.8, R0 = 0.006, END = 2.2, θ0 = Math.log(R0 / (K * R_MIN)) / B, steps = 220;
-    for (let j = 0; j <= steps; j++) {
-      const θl = θ0 + (END - θ0) * (j / steps), r = K * R_MIN * Math.exp(B * θl);
-      const tIn = smooth((θl - θ0) / 3.2), tOut = smooth((END - θl) / 2.6);
-      RIB.push({ θ: θl - THETA_SPAN, r, w: r * 0.42 * (0.12 + 0.88 * tIn) * (0.1 + 0.9 * tOut) });
-    }
-  })();
-  const RIB_IN = new Float32Array(RIB.length * 2), RIB_OUT = new Float32Array(RIB.length * 2);
-
   const CAM = 3.2;
   function project(x, y, z, rx, ry, out) {
     const cY = Math.cos(ry), sY = Math.sin(ry), x1 = x * cY + z * sY, z1 = -x * sY + z * cY;
@@ -187,7 +188,7 @@
     return out;
   }
 
-  let mode = "orbit", word = false, wordAt = 0;
+  let mode = "orbit";
   const energy = { orbit: 1, ripple: 0, pulse: 0, bloom: 0 };
   let rot = 0;
   const HS = { cx: 0, cy: 0, R: 0, scale: 0, rx: 0, ry: 0, spin: 0, eb: 0, w: 0 };
@@ -200,12 +201,12 @@
       const sb = Math.round(76 + HS.R * 2.2) + "px";
       if (hero.style.getPropertyValue("--spiral-bottom") !== sb) hero.style.setProperty("--spiral-bottom", sb);
     } else {
-      HS.R = Math.min(r.height * 0.4, W * 0.27, 400);
+      HS.R = Math.min(r.height * 0.37, W * 0.235, 360);
       HS.cx = W * 0.7; HS.cy = r.top + r.height * 0.5;
     }
   }
   function heroPoint(x, y) {
-    let z = -0.1 * (1 - Math.min(1, Math.hypot(x, y)));
+    let z = -0.04 * (1 - Math.min(1, Math.hypot(x, y)));
     if (energy.ripple > 0.001) {
       const w = Math.sin(Math.hypot(x, y) * 16 - T * 3.4) * energy.ripple;
       z += w * 0.05; x *= 1 + w * 0.02; y *= 1 + w * 0.02;
@@ -219,29 +220,18 @@
     heroGeom();
     const breathe = 1 + Math.sin(t * 0.9) * 0.022 + energy.pulse * Math.sin(t * 2.2) * 0.018;
     HS.scale = HS.R * breathe;
-    HS.rx = 0.32 + mouse.ny * 0.22 - HS.eb * 0.2;
-    HS.ry = -0.34 + mouse.nx * 0.28 + HS.eb * 0.2;
+    HS.rx = 0.1 + mouse.ny * 0.16 - HS.eb * 0.08;
+    HS.ry = -0.1 + mouse.nx * 0.2 + HS.eb * 0.08;
     HS.spin = BASE_ROT + rot + energy.orbit * 0.12 * Math.sin(t * 0.55);
-    if (word) {
-      const ww = W < 900 ? W * 0.9 : Math.min(W * 0.46, 720), wh = ww * 0.2;
-      const s = sampleText("NANOFINITY", ww, wh, 700, Math.floor(N * 0.9));
-      const o = shuffled("word");
-      for (let j = 0; j < s.n; j++) {
-        const i = o[j], x = s.pts[j * 2], y = s.pts[j * 2 + 1];
-        const sh = Math.pow(Math.max(0, Math.sin(x / ww * 5 - t * 1.6)), 10);
-        set(i, HS.cx + x, HS.cy + y + Math.sin(t * 1.2 + x * 0.02) * 1.5, s.step * 0.4, 0.95, sh * 0.4, sh);
-      }
-      dust(o, s.n, HS.cx - ww * 0.6, HS.cy - wh * 1.2, ww * 1.2, wh * 2.4, t, 0.1);
-      return;
-    }
     const eb = HS.eb, pulsePhase = (t * 0.32) % 1.25, M = pearls.length;
     for (let i = 0; i < N; i++) {
-      if (i >= M) { // extra dots rest invisibly on the centre curl
-        const q = RIB[(i * 7) % RIB.length], a = q.θ + HS.spin, p = heroPoint(Math.cos(a) * q.r, Math.sin(a) * q.r);
+      if (i >= M) { // spare dots rest invisibly under the outer pearls
+        const P = pearls[i % M], a = P.θ + HS.spin, p = heroPoint(Math.cos(a) * P.r, Math.sin(a) * P.r);
         set(i, p.x, p.y, 0.5, 0); continue;
       }
-      const P = pearls[i], ang = P.θ + HS.spin;
-      let x = Math.cos(ang) * P.r, y = Math.sin(ang) * P.r, size = P.size, a = P.alpha;
+      const P = pearls[i], ang = P.θ + HS.spin, cS = Math.cos(HS.spin), sS = Math.sin(HS.spin);
+      const ux = (Math.cos(P.θ) * P.r + HC.ox) * HC.fit, uy = (Math.sin(P.θ) * P.r + HC.oy) * HC.fit;
+      let x = ux * cS - uy * sS, y = ux * sS + uy * cS, size = P.size * HC.fit, a = P.alpha;
       if (eb > 0.001) {
         const ca = Math.cos(rot * 0.6), sa = Math.sin(rot * 0.6);
         const bx = P.bx * ca - P.by * sa, by = P.bx * sa + P.by * ca, sw = Math.sin(eb * Math.PI) * 0.6;
@@ -255,7 +245,19 @@
         g = (Math.exp(-(d * d) / 0.004) + 0.6 * Math.exp(-(d2 * d2) / 0.004)) * energy.pulse;
       }
       const sh = Math.pow(Math.max(0, Math.sin(ang - t * 1.3 + P.s * 0.4)), 10) * (0.9 - eb * 0.3);
-      set(i, p.x, p.y, size * HS.scale * p.p * (1 + g * 0.35), a, g, sh);
+      let qx = p.x, qy = p.y, lens = 0;
+      if (mouse.on && !reduce) {
+        // smooth, order-preserving lens: dots part gently around the cursor and catch the light — never fold
+        const dx = qx - mouse.x, dy = qy - mouse.y, d2 = dx * dx + dy * dy, sg = 105;
+        if (d2 < 9 * sg * sg) {
+          const d = Math.sqrt(d2) || 1, hold = smooth((Math.hypot(ux, uy) - 0.12) / 0.4); // the eye stays calm
+          lens = Math.exp(-d2 / (sg * sg)); const push = 20 * lens * hold;
+          qx += (dx / d) * push; qy += (dy / d) * push;
+        }
+      }
+      const px = size * HS.scale * p.p * (1 + g * 0.35 + lens * 0.12);
+      // tiniest dots at the eye: fade smoothly instead of piling up into a blob
+      set(i, qx, qy, Math.max(0.35, px), a * smooth((px - 0.3) / 0.5), g, Math.min(1, sh + lens * 0.55));
     }
   };
 
@@ -504,7 +506,6 @@
   function setForm(k) {
     if (k === current || !formations[k]) return;
     current = k;
-    if (k !== "hero") word = false;
   }
 
   // ---------- input ----------
@@ -513,20 +514,14 @@
   addEventListener("pointermove", (e) => {
     mouse.x = e.clientX; mouse.y = e.clientY; mouse.on = e.pointerType === "mouse";
     mouse.tx = (e.clientX / W) * 2 - 1; mouse.ty = (e.clientY / H) * 2 - 1;
-    if (current === "hero" && fine && W >= 900 && !document.body.classList.contains("menu-open")) {
-      const d = Math.hypot(e.clientX - HS.cx, e.clientY - HS.cy);
-      if (!word && d < HS.R * 0.95 && !e.target.closest(".hero__modes,a,button")) { word = true; wordAt = T; }
-      else if (word && d > HS.R * 1.25 && T - wordAt > 0.4) word = false;
-    }
   }, { passive: true });
-  document.addEventListener("pointerleave", () => { mouse.on = false; mouse.x = mouse.y = -9999; mouse.tx = mouse.ty = 0; if (fine) word = false; });
+  document.addEventListener("pointerleave", () => { mouse.on = false; mouse.x = mouse.y = -9999; mouse.tx = mouse.ty = 0; });
   addEventListener("pointerdown", (e) => {
     if (e.target.closest("a,button,input,select,textarea,label")) return;
     rings.push({ x: e.clientX, y: e.clientY, r: 0 });
-    if (current === "hero" && (e.pointerType !== "mouse" || W < 900) && Math.hypot(e.clientX - HS.cx, e.clientY - HS.cy) < HS.R * 1.2) { word = !word; wordAt = T; }
   });
   document.querySelectorAll(".hero__modes .mode").forEach((b, _, all) => b.addEventListener("click", () => {
-    mode = b.dataset.mode; word = false;
+    mode = b.dataset.mode;
     all.forEach((o) => { const on = o === b; o.classList.toggle("is-active", on); o.setAttribute("aria-pressed", String(on)); });
     if (mode === "ripple") rings.push({ x: HS.cx, y: HS.cy, r: 0 });
   }));
@@ -549,30 +544,7 @@
 
   // ---------- render ----------
   let T = 0, last = performance.now(), lastSY = scrollY, running = true;
-  function drawRibbon(alpha) {
-    const L = RIB.length;
-    for (let j = 0; j < L; j++) {
-      const q = RIB[j], a = q.θ + HS.spin, c = Math.cos(a), s = Math.sin(a);
-      let p = heroPoint(c * (q.r - q.w / 2), s * (q.r - q.w / 2)); RIB_IN[j * 2] = p.x; RIB_IN[j * 2 + 1] = p.y;
-      p = heroPoint(c * (q.r + q.w / 2), s * (q.r + q.w / 2)); RIB_OUT[j * 2] = p.x; RIB_OUT[j * 2 + 1] = p.y;
-    }
-    const path = (dx, dy) => {
-      ctx.beginPath(); ctx.moveTo(RIB_OUT[0] + dx, RIB_OUT[1] + dy);
-      for (let j = 1; j < L; j++) ctx.lineTo(RIB_OUT[j * 2] + dx, RIB_OUT[j * 2 + 1] + dy);
-      for (let j = L - 1; j >= 0; j--) ctx.lineTo(RIB_IN[j * 2] + dx, RIB_IN[j * 2 + 1] + dy);
-      ctx.closePath();
-    };
-    const sc = HS.scale, span = sc * 0.25;
-    ctx.globalAlpha = alpha * 0.45; ctx.fillStyle = "rgba(0,0,0,0.85)"; path(sc * 0.006, sc * 0.01); ctx.fill();
-    const gr = ctx.createLinearGradient(HS.cx - span, HS.cy - span, HS.cx + span, HS.cy + span);
-    [[0, "#fff1c4"], [0.3, "#f0cf75"], [0.55, "#d4af37"], [0.8, "#a67c2e"], [1, "#7a5416"]].forEach(([o, c]) => gr.addColorStop(o, c));
-    ctx.globalAlpha = alpha; ctx.fillStyle = gr; path(0, 0); ctx.fill();
-    ctx.lineJoin = "round"; ctx.lineWidth = Math.max(0.6, sc * 0.0022);
-    ctx.strokeStyle = "rgba(255,244,210,0.75)"; ctx.beginPath(); ctx.moveTo(RIB_OUT[0], RIB_OUT[1]);
-    for (let j = 1; j < L; j++) ctx.lineTo(RIB_OUT[j * 2], RIB_OUT[j * 2 + 1]); ctx.stroke();
-    ctx.strokeStyle = "rgba(70,45,10,0.55)"; ctx.beginPath(); ctx.moveTo(RIB_IN[0], RIB_IN[1]);
-    for (let j = 1; j < L; j++) ctx.lineTo(RIB_IN[j * 2], RIB_IN[j * 2 + 1]); ctx.stroke();
-  }
+
 
   function frame(now) {
     if (!running) return;
@@ -588,7 +560,7 @@
 
     for (const k in energy) energy[k] = lerp(energy[k], mode === k ? 1 : 0, Math.min(1, dt * 2.5));
     HS.eb = smooth(energy.bloom);
-    HS.w = lerp(HS.w, current === "hero" && !word ? 1 : 0, Math.min(1, dt * 4));
+    HS.w = lerp(HS.w, current === "hero" ? 1 : 0, Math.min(1, dt * 4));
     rot += dt * (0.07 + energy.orbit * 0.16) * (reduce ? 0.3 : 1);
     mouse.nx = lerp(mouse.nx, mouse.tx, Math.min(1, dt * 3));
     mouse.ny = lerp(mouse.ny, mouse.ty, Math.min(1, dt * 3));
@@ -600,13 +572,13 @@
     for (let r = rings.length - 1; r >= 0; r--) if ((rings[r].r += 16 * f) > Math.max(W, H) * 1.2) rings.splice(r, 1);
     for (let i = 0; i < N; i++) {
       let ax = (tx[i] - px[i]) * k, ay = (ty[i] - py[i]) * k;
-      if (mouse.on && !reduce) {
+      if (mouse.on && !reduce && current !== "hero") { // hero uses a fold-free lens on its targets instead
         const dx = px[i] - mouse.x, dy2 = py[i] - mouse.y, d2 = dx * dx + dy2 * dy2;
         if (d2 < MR * MR) { const d = Math.sqrt(d2) || 1, s = ((MR - d) / MR) * 1.5; ax += (dx / d) * s; ay += (dy2 / d) * s; }
       }
       for (const rg of rings) {
         const dx = px[i] - rg.x, dy2 = py[i] - rg.y, d = Math.hypot(dx, dy2) || 1;
-        if (Math.abs(d - rg.r) < 26) { ax += (dx / d) * 6; ay += (dy2 / d) * 6; }
+        if (Math.abs(d - rg.r) < 26) { const F = current === "hero" ? 2.6 : 6; ax += (dx / d) * F; ay += (dy2 / d) * F; }
       }
       vx[i] = (vx[i] + ax * f) * damp; vy[i] = (vy[i] + ay * f) * damp;
       px[i] += vx[i] * f; py[i] += vy[i] * f;
@@ -636,8 +608,6 @@
       ctx.drawImage(shadow, px[i] - z / 2 + s * 0.35, py[i] - z / 2 + s * 0.55, z, z);
     }
     // pass 2: centre curl (hero spiral only)
-    const ribA = HS.w * (1 - HS.eb);
-    if (ribA > 0.01 && HS.cy + HS.scale > 0 && HS.cy - HS.scale < H) drawRibbon(ribA);
     // pass 3: warm glow
     ctx.globalCompositeOperation = "lighter";
     for (let i = 0; i < N; i++) {
