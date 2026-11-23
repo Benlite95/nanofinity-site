@@ -148,19 +148,22 @@
   const R_MIN = 0.028, THETA_SPAN = Math.log(1 / R_MIN) / HB, BASE_ROT = Math.PI * 0.92;
   let pearls = [];
   const HC = { ox: 0, oy: 0, fit: 1 }; // recentre + fit the silhouette so it sits balanced in its circle
+  // Conveyor flow: every strand is a ring of evenly spaced slots along θ ∈ [0, SPAN). Main pearls slide
+  // inward (θ decreasing), the two fine trails slide outward. Because the spiral is self-similar
+  // (size ∝ r, spacing ∝ r), shifting θ keeps the pattern perfectly even, and slots that wrap around do
+  // so while invisible (shrunk to nothing at the eye / faded at the rim) so the loop never pops.
+  const FLOW = [-0.2, 0.3, 0.26]; // rad/s per strand: − inward (nano), + outward (infinity)
+  let flowOff = [0, 0, 0], warp = 1, lastHeroT = -1;
   function buildHero() {
     const rows = ROWS.map((row, s) => {
-      const dθ = (row.gap * row.size) / HSQ, list = [];
-      for (let θ = 0; θ <= THETA_SPAN + 1e-6; θ += dθ) {
-        const r = row.k * R_MIN * Math.exp(HB * θ);
-        if (r * row.size < 0.0011) continue; // sub-pixel even on big screens: skip
-        // fade in only the sub-pixel dots right at the eye; keep a soft, rounded finish on the last few pearls
-        const startT = smooth(θ / 3.5), endT = smooth((THETA_SPAN - θ) / 0.9);
-        list.push({ s, θ: θ - THETA_SPAN, r, size: r * row.size * (0.82 + 0.18 * endT), alpha: (0.45 + 0.55 * startT) * (s ? 0.92 * smooth((THETA_SPAN - θ) / 1.6) : 1) });
+      const count = Math.max(8, Math.round(THETA_SPAN / ((row.gap * row.size) / HSQ))), dθ = THETA_SPAN / count, list = [];
+      for (let j = 0; j < count; j++) {
+        const θ = j * dθ, r = row.k * R_MIN * Math.exp(HB * θ);
+        list.push({ s, k: row.k, rs: row.size, θ0: θ, θ: θ - THETA_SPAN, r, size: r * row.size, alpha: 1, last: θ });
       }
       return list;
     });
-    // thin the fine inner rows evenly if we have fewer dots than pearls (phones)
+    // thin the fine trails evenly only if there are more slots than dots
     const c0 = rows[0].length, rest = rows.slice(1).reduce((a, r) => a + r.length, 0);
     const f = Math.min(1, (N - c0) / rest);
     pearls = rows[0].slice();
@@ -224,14 +227,35 @@
     HS.ry = -0.1 + mouse.nx * 0.2 + HS.eb * 0.08;
     HS.spin = BASE_ROT + rot + energy.orbit * 0.12 * Math.sin(t * 0.55);
     const eb = HS.eb, pulsePhase = (t * 0.32) % 1.25, M = pearls.length;
+    // hover warp: the vortex speeds up while the cursor is over the spiral, then eases back to cruise
+    const dtH = lastHeroT < 0 ? 0 : Math.max(0, Math.min(0.05, t - lastHeroT)); lastHeroT = t;
+    const over = mouse.on && Math.hypot(mouse.x - HS.cx, mouse.y - HS.cy) < HS.R * 1.15;
+    warp = lerp(warp, over ? 3.4 : 1, Math.min(1, dtH * (over ? 3 : 1.4)));
+    const calm = 1 - eb; // bloom freezes the conveyor into the sunflower
+    for (let s2 = 0; s2 < 3; s2++) flowOff[s2] += FLOW[s2] * warp * calm * (reduce ? 0.2 : 1) * dtH;
+    const cS = Math.cos(HS.spin), sS = Math.sin(HS.spin);
     for (let i = 0; i < N; i++) {
-      if (i >= M) { // spare dots rest invisibly under the outer pearls
-        const P = pearls[i % M], a = P.θ + HS.spin, p = heroPoint(Math.cos(a) * P.r, Math.sin(a) * P.r);
+      if (i >= M) { // spare dots rest invisibly at the eye
+        const p = heroPoint(HC.ox * HC.fit * cS - HC.oy * HC.fit * sS, HC.ox * HC.fit * sS + HC.oy * HC.fit * cS);
         set(i, p.x, p.y, 0.5, 0); continue;
       }
-      const P = pearls[i], ang = P.θ + HS.spin, cS = Math.cos(HS.spin), sS = Math.sin(HS.spin);
-      const ux = (Math.cos(P.θ) * P.r + HC.ox) * HC.fit, uy = (Math.sin(P.θ) * P.r + HC.oy) * HC.fit;
-      let x = ux * cS - uy * sS, y = ux * sS + uy * cS, size = P.size * HC.fit, a = P.alpha;
+      const P = pearls[i];
+      let θ = (P.θ0 + flowOff[P.s]) % THETA_SPAN; if (θ < 0) θ += THETA_SPAN;
+      const wrapped = Math.abs(θ - P.last) > THETA_SPAN * 0.5; P.last = θ;
+      const r = P.k * R_MIN * Math.exp(HB * θ), toRim = THETA_SPAN - θ;
+      let size, a;
+      if (P.s === 0) { // big pearls: materialise (scale + fade) at the rim, shrink to nothing at the eye
+        const e = smooth(toRim / 1.5);
+        size = r * P.rs * (0.2 + 0.8 * e); a = e * smooth(θ / 3);
+      } else {         // fine trails: born at the eye, grow outward, fade out before the rim
+        const e = smooth(toRim / 2.6);
+        size = r * P.rs * (0.9 + 0.25 * (θ / THETA_SPAN)); a = 0.92 * e * smooth(θ / 3);
+      }
+      P.u = θ / THETA_SPAN;
+      const θa = θ - THETA_SPAN, ang = θa + HS.spin;
+      const ux = (Math.cos(θa) * r + HC.ox) * HC.fit, uy = (Math.sin(θa) * r + HC.oy) * HC.fit;
+      let x = ux * cS - uy * sS, y = ux * sS + uy * cS;
+      size *= HC.fit;
       if (eb > 0.001) {
         const ca = Math.cos(rot * 0.6), sa = Math.sin(rot * 0.6);
         const bx = P.bx * ca - P.by * sa, by = P.bx * sa + P.by * ca, sw = Math.sin(eb * Math.PI) * 0.6;
@@ -254,9 +278,10 @@
           lens = Math.exp(-d2 / (sg * sg)) * (0.4 + 0.6 * hold); // light catch near the cursor (push is physical, below)
         }
       }
-      const px = size * HS.scale * p.p * (1 + g * 0.35 + lens * 0.12);
+      const pxs = size * HS.scale * p.p * (1 + g * 0.35 + lens * 0.12);
       // tiniest dots at the eye: fade smoothly instead of piling up into a blob
-      set(i, qx, qy, Math.max(0.35, px), a * smooth((px - 0.3) / 0.5), g, Math.min(1, sh + lens * 0.55));
+      set(i, qx, qy, Math.max(0.35, pxs), a * smooth((pxs - 0.3) / 0.5), g, Math.min(1, sh + lens * 0.55));
+      if (wrapped) { px[i] = qx; py[i] = qy; vx[i] = 0; vy[i] = 0; pa[i] = 0; ps[i] = 0.35; }
     }
   };
 
@@ -666,6 +691,8 @@
       if (labRegion) rings.push({ x: labRegion.x + labRegion.w / 2, y: labRegion.y + labRegion.h / 2, r: 0 });
     },
     shock(x, y) { rings.push({ x, y, r: 0 }); },
-    get formation() { return current; }
+    get formation() { return current; },
+    // QA helper: fastest visible dot (px/frame) and current hover-warp factor
+    stats() { let m = 0; for (let i = 0; i < N; i++) if (pa[i] > 0.08) m = Math.max(m, Math.hypot(vx[i], vy[i])); return { maxVisibleSpeed: m, warp }; }
   };
 })();

@@ -236,7 +236,6 @@ p { margin: 0 0 1rem; }
 /* ---------- Divider ---------- */
 .divider { display: flex; justify-content: center; padding: 0; height: 1px; margin-top: -1px; position: relative; z-index: 2; }
 .divider svg { width: 120px; height: 75px; flex: none; align-self: flex-start; overflow: visible; transform: translateY(-50%); filter: drop-shadow(0 0 12px rgba(255, 180, 90, 0.35)); }
-.divider--flip svg { transform: translateY(-50%) scaleX(-1); }
 .divider__path { fill: none; stroke: var(--gold); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: var(--len, 900); stroke-dashoffset: var(--len, 900); transition: stroke-dashoffset 2.4s var(--ease); }
 .divider.is-visible .divider__path { stroke-dashoffset: 0; }
 
